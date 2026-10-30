@@ -16,6 +16,7 @@ describe('Config Module', () => {
     expect(config.GITHUB_CALLBACK_URL).toBe('http://localhost:3001/api/auth/github/callback');
     expect(config.FRONTEND_URL).toBe('http://localhost:3000');
     expect(config.SESSION_SECRET).toBe('devos-default-session-secret-key-32-chars-long');
+    expect(config.DEVOS_DEMO_MODE).toBe(false);
   });
 
   it('correctly parses and coerces valid custom environment variables', () => {

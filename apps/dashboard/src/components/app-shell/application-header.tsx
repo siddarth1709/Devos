@@ -13,6 +13,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
+import { DevosLogo } from "@/components/brand/devos-logo";
 import { useAuth } from "@/hooks/use-auth";
 import { useGitHubStatus } from "@/hooks/use-devos-api";
 
@@ -26,7 +27,7 @@ export function ApplicationHeader({
   onOpenConnectModal,
 }: ApplicationHeaderProps) {
   const pathname = usePathname();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isDemo, logout, exitDemo } = useAuth();
   const { isError, isLoading } = useGitHubStatus();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -79,7 +80,7 @@ export function ApplicationHeader({
 
   return (
     <header className="h-[64px] sticky top-0 z-30 w-full bg-[#090A0A]/85 backdrop-blur-md border-b border-[#292E2A] px-4 sm:px-6 flex items-center justify-between">
-      {/* Left: Mobile Toggle & Breadcrumbs */}
+      {/* Left: Mobile Toggle, Brand Icon & Breadcrumbs */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
@@ -89,6 +90,14 @@ export function ApplicationHeader({
         >
           <Menu size={18} />
         </button>
+
+        <Link
+          href="/app"
+          className="md:hidden flex items-center text-[#F0F2ED] shrink-0"
+          aria-label="DEVOS home"
+        >
+          <DevosLogo size="sm" showWordmark={false} />
+        </Link>
 
         {/* Dynamic Breadcrumbs */}
         <nav
@@ -185,34 +194,55 @@ export function ApplicationHeader({
                     </div>
                   )}
                   <div className="pt-1">
-                    <span className="inline-block px-1.5 py-0.5 rounded text-[9px] uppercase bg-[#C7F36B]/15 text-[#C7F36B] border border-[#C7F36B]/30 font-semibold">
-                      {user.role || "Developer"}
+                    <span
+                      className={`inline-block px-1.5 py-0.5 rounded text-[9px] uppercase font-semibold ${
+                        isDemo
+                          ? "bg-[#E9B96E]/15 text-[#E9B96E] border border-[#E9B96E]/30"
+                          : "bg-[#C7F36B]/15 text-[#C7F36B] border border-[#C7F36B]/30"
+                      }`}
+                    >
+                      {user.role || (isDemo ? "Demo Investigator" : "Developer")}
                     </span>
                   </div>
                 </div>
 
                 <div className="py-2 border-b border-[#1D221F] space-y-1">
-                  <a
-                    href={`https://github.com/${user.login}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between px-2 py-1.5 rounded text-[#A0A79F] hover:text-[#F0F2ED] hover:bg-[#151816] transition-colors"
-                  >
-                    <span>View GitHub Profile</span>
-                    <ExternalLink size={12} />
-                  </a>
+                  {isDemo ? (
+                    <Link
+                      href="/login"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center justify-between px-2 py-1.5 rounded text-[#C7F36B] hover:bg-[#151816] transition-colors"
+                    >
+                      <span>Connect Real GitHub</span>
+                      <ExternalLink size={12} />
+                    </Link>
+                  ) : (
+                    <a
+                      href={`https://github.com/${user.login}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between px-2 py-1.5 rounded text-[#A0A79F] hover:text-[#F0F2ED] hover:bg-[#151816] transition-colors"
+                    >
+                      <span>View GitHub Profile</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
                 </div>
 
                 <div className="pt-2">
                   <button
                     onClick={() => {
                       setDropdownOpen(false);
-                      logout();
+                      if (isDemo) {
+                        exitDemo();
+                      } else {
+                        logout();
+                      }
                     }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[#F07878] hover:bg-[#F07878]/10 transition-colors"
                   >
                     <LogOut size={13} />
-                    <span>Sign Out</span>
+                    <span>{isDemo ? "Exit Demo Mode" : "Sign Out"}</span>
                   </button>
                 </div>
               </div>

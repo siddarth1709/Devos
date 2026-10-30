@@ -22,7 +22,7 @@ interface ApplicationSidebarProps {
 
 export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarProps) {
   const pathname = usePathname();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isDemo } = useAuth();
   const { data: githubStatus, isError } = useGitHubStatus();
 
   const primaryNav = [
@@ -145,18 +145,22 @@ export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarPro
         <div className="p-3 bg-[#151816] border border-[#222724] rounded-[4px] flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
             <span className="font-mono text-[8px] tracking-[0.1em] text-[#6E776F] uppercase">
-              GITHUB INTEGRATION
+              {isDemo ? "DEMONSTRATION MODE" : "GITHUB INTEGRATION"}
             </span>
             <span
               className={`w-2 h-2 rounded-full ${
-                isAuthenticated || githubStatus?.status === "connected"
+                isDemo
+                  ? "bg-[#E9B96E] shadow-[0_0_8px_rgba(233,185,110,0.5)]"
+                  : isAuthenticated || githubStatus?.status === "connected"
                   ? "bg-[#79D69A] shadow-[0_0_8px_rgba(121,214,154,0.5)]"
                   : isError
                   ? "bg-[#E9B96E]"
                   : "bg-[#6E776F]"
               }`}
               title={
-                isAuthenticated || githubStatus?.status === "connected"
+                isDemo
+                  ? "Demo Mode Active"
+                  : isAuthenticated || githubStatus?.status === "connected"
                   ? "Connected to GitHub"
                   : "Not Connected"
               }
@@ -183,7 +187,9 @@ export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarPro
                   : githubStatus?.user?.login || "Local Workspace"}
               </span>
               <span className="block font-mono text-[9px] text-[#A0A79F] truncate">
-                {isAuthenticated && user
+                {isDemo
+                  ? "No GitHub connected"
+                  : isAuthenticated && user
                   ? `@${user.login}`
                   : githubStatus?.status === "connected"
                   ? "Authorized via GitHub"

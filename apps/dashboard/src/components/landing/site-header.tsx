@@ -11,7 +11,7 @@ export function SiteHeader() {
   const [activeSection, setActiveSection] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isDemo, enterDemo } = useAuth();
 
   const navLinks = [
     { label: "Impact", href: "#impact-trace" },
@@ -129,18 +129,41 @@ export function SiteHeader() {
           })}
         </nav>
 
-        {/* Right: Desktop CTA */}
-        <div className="hidden md:flex items-center">
-          <Link
-            href={isAuthenticated ? "/app" : "/login"}
-            className="group relative inline-flex items-center gap-1.5 h-[38px] px-4 border border-[#3A4338] bg-transparent text-[#C7F36B] font-mono text-[10px] tracking-[0.06em] uppercase rounded-[3px] hover:bg-[#C7F36B] hover:text-[#090A0A] hover:border-[#C7F36B] transition-all duration-[220ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B] active:scale-[0.98] shadow-sm hover:shadow-[0_0_16px_rgba(199,243,107,0.25)]"
-          >
-            <span>{isAuthenticated ? "OPEN DEVOS" : "SIGN IN WITH GITHUB"}</span>
-            <ArrowUpRight
-              size={12}
-              className="transition-transform duration-[200ms] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-            />
-          </Link>
+        {/* Right: Desktop CTAs */}
+        <div className="hidden md:flex items-center gap-2.5">
+          {isAuthenticated ? (
+            <Link
+              href="/app"
+              className="group relative inline-flex items-center gap-1.5 h-[38px] px-4 border border-[#C7F36B] bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] tracking-[0.06em] uppercase rounded-[3px] hover:bg-[#D7FF86] transition-all duration-[220ms] font-semibold"
+            >
+              <span>{isDemo ? "OPEN DEMO CONSOLE" : "OPEN DEVOS"}</span>
+              <ArrowUpRight size={12} />
+            </Link>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => enterDemo()}
+                className="group relative inline-flex items-center gap-1.5 h-[38px] px-3.5 border border-[#3A4338] bg-[#151816] text-[#E9B96E] hover:text-[#090A0A] hover:bg-[#E9B96E] hover:border-[#E9B96E] font-mono text-[10px] tracking-[0.06em] uppercase rounded-[3px] transition-all duration-[220ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E9B96E] active:scale-[0.98]"
+              >
+                <span>EXPLORE DEMO</span>
+                <ArrowUpRight
+                  size={12}
+                  className="transition-transform duration-[200ms] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                />
+              </button>
+              <Link
+                href="/login"
+                className="group relative inline-flex items-center gap-1.5 h-[38px] px-4 border border-[#C7F36B] bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] font-semibold tracking-[0.06em] uppercase rounded-[3px] hover:bg-[#D7FF86] transition-all duration-[220ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B] active:scale-[0.98] shadow-sm hover:shadow-[0_0_16px_rgba(199,243,107,0.25)]"
+              >
+                <span>SIGN IN WITH GITHUB</span>
+                <ArrowUpRight
+                  size={12}
+                  className="transition-transform duration-[200ms] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                />
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile: Menu Toggle Button */}
@@ -190,21 +213,45 @@ export function SiteHeader() {
             </a>
           ))}
           <div
-            className={`pt-4 pb-2 transition-all duration-200 ${
+            className={`pt-4 pb-2 flex flex-col gap-2 transition-all duration-200 ${
               isOpen ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
             }`}
             style={{
               transitionDelay: `${navLinks.length * 45 + 50}ms`,
             }}
           >
-            <Link
-              href={isAuthenticated ? "/app" : "/login"}
-              onClick={() => setIsOpen(false)}
-              className="flex items-center justify-center gap-2 w-full h-[44px] border border-[#3A4338] bg-transparent text-[#C7F36B] font-mono text-[11px] tracking-[0.06em] uppercase rounded-[4px] hover:bg-[#C7F36B] hover:text-[#090A0A] hover:border-[#C7F36B] active:scale-[0.99] transition-all duration-200"
-            >
-              <span>{isAuthenticated ? "OPEN DEVOS" : "SIGN IN WITH GITHUB"}</span>
-              <ArrowUpRight size={13} />
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/app"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center justify-center gap-2 w-full h-[44px] bg-[#C7F36B] text-[#090A0A] font-mono text-[11px] font-semibold tracking-[0.06em] uppercase rounded-[4px]"
+              >
+                <span>{isDemo ? "OPEN DEMO CONSOLE" : "OPEN DEVOS"}</span>
+                <ArrowUpRight size={13} />
+              </Link>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    enterDemo();
+                  }}
+                  className="flex items-center justify-center gap-2 w-full h-[44px] border border-[#E9B96E]/50 bg-[#151816] text-[#E9B96E] font-mono text-[11px] tracking-[0.06em] uppercase rounded-[4px] hover:bg-[#E9B96E] hover:text-[#090A0A] transition-all"
+                >
+                  <span>EXPLORE DEMO</span>
+                  <ArrowUpRight size={13} />
+                </button>
+                <Link
+                  href="/login"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center justify-center gap-2 w-full h-[44px] bg-[#C7F36B] text-[#090A0A] font-mono text-[11px] font-semibold tracking-[0.06em] uppercase rounded-[4px] hover:bg-[#D7FF86] transition-all"
+                >
+                  <span>SIGN IN WITH GITHUB</span>
+                  <ArrowUpRight size={13} />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   FolderGit2,
@@ -13,14 +13,17 @@ import {
   Sparkles,
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
+import { useAuth } from "@/hooks/use-auth";
 import { useRepositories, useGitHubStatus } from "@/hooks/use-devos-api";
 import { ConnectGitHubModal } from "@/components/app-shell/connect-github-modal";
+import { DEMO_REPOSITORY, DEMO_PULL_REQUEST } from "@/lib/demo-fixtures";
 
 export default function DashboardOverviewPage() {
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const { isDemo } = useAuth();
   const { data: githubStatus } = useGitHubStatus();
   const {
-    data: repositories,
+    data: liveRepositories,
     isLoading,
     isError,
     error,
@@ -28,7 +31,13 @@ export default function DashboardOverviewPage() {
     isFetching,
   } = useRepositories();
 
-  const isConnected = githubStatus?.status === "connected";
+  const repositories = useMemo(() => {
+    if (liveRepositories && liveRepositories.length > 0) return liveRepositories;
+    if (isDemo) return [DEMO_REPOSITORY];
+    return [];
+  }, [liveRepositories, isDemo]);
+
+  const isConnected = isDemo || githubStatus?.status === "connected";
   const hasRepositories = repositories && repositories.length > 0;
 
   return (
@@ -134,9 +143,18 @@ export default function DashboardOverviewPage() {
             {repositories.map((repo) => (
               <Link
                 key={repo.id}
-                href={`/app/repositories/${encodeURIComponent(repo.id)}`}
-                className="group p-5 bg-[#101211] border border-[#292E2A] hover:border-[#44553D] rounded-[4px] transition-all duration-200 flex flex-col justify-between"
+                href={
+                  repo.id === DEMO_REPOSITORY.id
+                    ? "/app/graph?fixture=1"
+                    : `/app/repositories/${encodeURIComponent(repo.id)}`
+                }
+                className="group p-5 bg-[#101211] border border-[#292E2A] hover:border-[#44553D] rounded-[4px] transition-all duration-200 flex flex-col justify-between relative overflow-hidden"
               >
+                {repo.id === DEMO_REPOSITORY.id && (
+                  <div className="absolute top-0 right-0 bg-[#E9B96E]/15 border-b border-l border-[#E9B96E]/30 px-2 py-0.5 rounded-bl font-mono text-[8px] font-bold tracking-wider text-[#E9B96E] uppercase">
+                    DEMO PROJECT
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center justify-between pb-3 border-b border-[#1D221F]">
                     <span className="font-mono text-[9px] tracking-[0.08em] px-2 py-0.5 rounded-[2px] bg-[#151816] border border-[#292E2A] text-[#A0A79F] uppercase">
@@ -155,7 +173,7 @@ export default function DashboardOverviewPage() {
                 <div className="pt-4 mt-4 border-t border-[#1D221F] flex items-center justify-between text-[11px] font-mono text-[#A0A79F]">
                   <span>Branch: {repo.defaultBranch}</span>
                   <span className="text-[#C7F36B] group-hover:translate-x-1 transition-transform">
-                    &rarr;
+                    {repo.id === DEMO_REPOSITORY.id ? "Explore Graph &rarr;" : "&rarr;"}
                   </span>
                 </div>
               </Link>

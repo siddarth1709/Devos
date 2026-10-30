@@ -14,10 +14,13 @@ import type { UserProfile, ApiError } from "@/types/api";
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
+  isDemo: boolean;
   isLoading: boolean;
   isBackendOffline: boolean;
   login: (returnTo?: string) => void;
   logout: () => Promise<void>;
+  enterDemo: () => Promise<void>;
+  exitDemo: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -30,12 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  // 1. Real Authenticated User Query
   const {
-    data: user = null,
-    isLoading,
-    isError,
-    error,
-    refetch,
+    data: realUser = null,
+    isLoading: isLoadingReal,
+    isError: isErrorReal,
+    error: errorReal,
+    refetch: refetchReal,
   } = useQuery<UserProfile | null, ApiError>({
     queryKey: ["auth", "me"],
     queryFn: async () => {
@@ -52,14 +56,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     staleTime: 60_000,
     retry: (failureCount, err) => {
-      // Never retry on 401 (unauthenticated)
       if (err.status === 401) return false;
       return failureCount < 1;
     },
   });
 
+  // 2. Demo Session Status Query
+  const {
+    data: demoStatus = null,
+    isLoading: isLoadingDemo,
+    refetch: refetchDemo,
+  } = useQuery<{ isDemo: boolean; user: UserProfile | null }>({
+    queryKey: ["demo", "status"],
+    queryFn: async () => {
+      try {
+        return await api.getDemoStatus();
+      } catch {
+        return { isDemo: false, user: null };
+      }
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const isLoading = isLoadingReal || isLoadingDemo;
+
+  // Real user takes absolute precedence over demo
+  const isRealAuth = Boolean(realUser && realUser.id);
+  const isDemoActive = !isRealAuth && Boolean(demoStatus?.isDemo && demoStatus?.user);
+
+  const user = isRealAuth ? realUser : isDemoActive ? demoStatus!.user : null;
   const isAuthenticated = Boolean(user && user.id);
-  const isBackendOffline = isError && (error?.status === 0 || error?.code === "CONNECTION_REFUSED");
+  const isDemo = isDemoActive;
+
+  const isBackendOffline =
+    isErrorReal && (errorReal?.status === 0 || errorReal?.code === "CONNECTION_REFUSED");
 
   const login = useCallback(
     (returnTo?: string) => {
@@ -82,19 +113,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient, router]);
 
+  const enterDemo = useCallback(async () => {
+    try {
+      const res = await api.createDemoSession();
+      queryClient.setQueryData(["demo", "status"], {
+        isDemo: true,
+        sessionType: "demo",
+        user: res.user,
+      });
+      await queryClient.invalidateQueries();
+      router.push("/app");
+    } catch (err) {
+      console.error("Failed to enter demo mode:", err);
+      // Fallback: enter demo in frontend with fixture
+      router.push("/app");
+    }
+  }, [queryClient, router]);
+
+  const exitDemo = useCallback(async () => {
+    try {
+      await api.logoutDemo();
+    } catch {
+      // Ignore network errors
+    } finally {
+      queryClient.setQueryData(["demo", "status"], {
+        isDemo: false,
+        sessionType: null,
+        user: null,
+      });
+      await queryClient.invalidateQueries();
+      router.push("/");
+    }
+  }, [queryClient, router]);
+
   const refresh = useCallback(async () => {
-    await refetch();
-  }, [refetch]);
+    await Promise.all([refetchReal(), refetchDemo()]);
+  }, [refetchReal, refetchDemo]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
         isAuthenticated,
+        isDemo,
         isLoading,
         isBackendOffline,
         login,
         logout,
+        enterDemo,
+        exitDemo,
         refresh,
       }}
     >

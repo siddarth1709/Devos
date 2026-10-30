@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ContextSelectorHeader } from "@/components/app-shell/context-selector-header";
 import { EngineeringGraph } from "@/components/graph/engineering-graph";
 import { useDependencyGraph, useAnalysisReport } from "@/hooks/use-devos-api";
+import { useAuth } from "@/hooks/use-auth";
 import {
   FIXTURE_DEPENDENCY_GRAPH,
   FIXTURE_ANALYSIS_REPORT,
@@ -17,9 +18,11 @@ function GraphPageContent() {
   const repoParam = searchParams.get("repo") || "siddarth1709-Devos";
   const prParam = searchParams.get("pr") || "2";
   const focusNodeParam = searchParams.get("focusNode") || null;
-  const initialUseFixture = searchParams.get("fixture") === "1";
+  const { isDemo } = useAuth();
+  const initialUseFixture = searchParams.get("fixture") === "1" || isDemo;
 
   const [useFixtureMode, setUseFixtureMode] = useState<boolean>(initialUseFixture);
+  const isEffectiveFixture = isDemo || useFixtureMode;
 
   // Live backend queries
   const {
@@ -32,20 +35,20 @@ function GraphPageContent() {
 
   const { data: liveReport } = useAnalysisReport("job_anl_982347102");
 
-  // Determine active dataset: live data if present, otherwise fixture if user enabled preview mode
+  // Determine active dataset: live data if present, otherwise fixture if in demo or user enabled preview mode
   const activeGraphData = useMemo(() => {
     if (liveGraphData && liveGraphData.symbols.length > 0) return liveGraphData;
-    if (useFixtureMode) return FIXTURE_DEPENDENCY_GRAPH;
+    if (isEffectiveFixture) return FIXTURE_DEPENDENCY_GRAPH;
     return null;
-  }, [liveGraphData, useFixtureMode]);
+  }, [liveGraphData, isEffectiveFixture]);
 
   const activeFindings = useMemo(() => {
     if (liveReport?.findings && liveReport.findings.length > 0) {
       return liveReport.findings;
     }
-    if (useFixtureMode) return FIXTURE_ANALYSIS_REPORT.findings;
+    if (isEffectiveFixture) return FIXTURE_ANALYSIS_REPORT.findings;
     return [];
-  }, [liveReport, useFixtureMode]);
+  }, [liveReport, isEffectiveFixture]);
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-4">

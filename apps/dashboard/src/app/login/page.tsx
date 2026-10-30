@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { GithubIcon } from "@/components/icons/github-icon";
-import { ShieldCheck, AlertCircle, ArrowLeft, Lock } from "lucide-react";
+import { ShieldCheck, AlertCircle, ArrowLeft, Lock, Sparkles } from "lucide-react";
 import { DevosLogo } from "@/components/brand/devos-logo";
 
 function LoginContent() {
@@ -13,7 +13,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/app";
   const errorParam = searchParams.get("error");
-  const { login, isLoading: isAuthChecking, isAuthenticated } = useAuth();
+  const { login, enterDemo, isLoading: isAuthChecking, isAuthenticated } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -114,6 +114,31 @@ function LoginContent() {
                 </>
               )}
             </button>
+          </div>
+
+          {/* Divider */}
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-[#1D221F]"></div>
+            <span className="flex-shrink mx-3 text-[#6E776F] font-mono text-[10px] uppercase tracking-wider">
+              or instant evaluation
+            </span>
+            <div className="flex-grow border-t border-[#1D221F]"></div>
+          </div>
+
+          {/* Instant Demo Access Button */}
+          <div>
+            <button
+              type="button"
+              onClick={() => enterDemo()}
+              disabled={isSubmitting || isAuthChecking}
+              className="w-full flex items-center justify-center gap-2.5 h-[46px] bg-[#151816] hover:bg-[#1D221F] border border-[#E9B96E]/40 hover:border-[#E9B96E] text-[#E9B96E] font-mono text-[11px] font-semibold uppercase tracking-wider rounded-[6px] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E9B96E] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+            >
+              <Sparkles size={15} className="text-[#E9B96E]" />
+              <span>Explore Instant Demo Mode</span>
+            </button>
+            <p className="mt-2 text-center font-mono text-[10px] text-[#6E776F]">
+              Direct access with pre-loaded engineering graph and code review.
+            </p>
           </div>
 
           {/* Privacy & Zero-Code Storage Pledge */}

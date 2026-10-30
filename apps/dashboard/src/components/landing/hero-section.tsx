@@ -10,7 +10,7 @@ export function HeroSection() {
   const [magnetPos, setMagnetPos] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
   const primaryCtaRef = useRef<HTMLAnchorElement>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isDemo, enterDemo } = useAuth();
 
   const handleMouseMove = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -83,32 +83,56 @@ export function HeroSection() {
 
             {/* Hero CTAs */}
             <div className="animate-entrance delay-4 mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-              <a
-                ref={primaryCtaRef}
-                href="#impact-trace"
-                onMouseMove={handleMouseMove}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                style={{
-                  transform: `translate3d(${magnetPos.x}px, ${magnetPos.y}px, 0)`,
-                  transition: isHovered
-                    ? "transform 80ms ease-out, background-color 220ms var(--ease-interactive), box-shadow 250ms var(--ease-interactive)"
-                    : "transform 350ms var(--ease-primary), background-color 220ms var(--ease-interactive), box-shadow 250ms var(--ease-interactive)",
-                }}
-                className="group relative inline-flex items-center justify-center gap-2 h-[46px] sm:h-[48px] px-5 sm:px-6 bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] sm:text-[11px] font-semibold tracking-[0.05em] uppercase rounded-[4px] hover:bg-[#D7FF86] active:scale-[0.98] shadow-sm hover:shadow-[0_0_24px_rgba(199,243,107,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B] will-change-transform"
-              >
-                <span>EXPLORE THE SYSTEM</span>
-                <ArrowRight
-                  size={14}
-                  className="transition-transform duration-[220ms] group-hover:translate-x-1.5"
-                />
-              </a>
-              <Link
-                href={isAuthenticated ? "/app" : "/login"}
-                className="inline-flex items-center justify-center h-[46px] sm:h-[48px] px-4 sm:px-5 bg-transparent text-[#F0F2ED] font-mono text-[10px] sm:text-[11px] tracking-[0.05em] uppercase border border-[#292E2A] rounded-[4px] hover:border-[#6E776F] hover:bg-[#101211] active:scale-[0.98] transition-all duration-[200ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B]"
-              >
-                {isAuthenticated ? "OPEN CONSOLE" : "SIGN IN WITH GITHUB"}
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    href="/app"
+                    className="group relative inline-flex items-center justify-center gap-2 h-[46px] sm:h-[48px] px-6 sm:px-7 bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] sm:text-[11px] font-semibold tracking-[0.05em] uppercase rounded-[4px] hover:bg-[#D7FF86] active:scale-[0.98] shadow-sm hover:shadow-[0_0_24px_rgba(199,243,107,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B]"
+                  >
+                    <span>{isDemo ? "ENTER DEMO CONSOLE" : "OPEN DEVOS CONSOLE"}</span>
+                    <ArrowRight
+                      size={14}
+                      className="transition-transform duration-[220ms] group-hover:translate-x-1.5"
+                    />
+                  </Link>
+                  <a
+                    href="#impact-trace"
+                    className="inline-flex items-center justify-center h-[46px] sm:h-[48px] px-4 sm:px-5 bg-transparent text-[#F0F2ED] font-mono text-[10px] sm:text-[11px] tracking-[0.05em] uppercase border border-[#292E2A] rounded-[4px] hover:border-[#6E776F] hover:bg-[#101211] active:scale-[0.98] transition-all duration-[200ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B]"
+                  >
+                    HOW IT WORKS
+                  </a>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="group relative inline-flex items-center justify-center gap-2 h-[46px] sm:h-[48px] px-6 sm:px-7 bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] sm:text-[11px] font-semibold tracking-[0.05em] uppercase rounded-[4px] hover:bg-[#D7FF86] active:scale-[0.98] shadow-sm hover:shadow-[0_0_24px_rgba(199,243,107,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B]"
+                  >
+                    <span>SIGN IN WITH GITHUB</span>
+                    <ArrowRight
+                      size={14}
+                      className="transition-transform duration-[220ms] group-hover:translate-x-1.5"
+                    />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => enterDemo()}
+                    className="group relative inline-flex items-center justify-center gap-2 h-[46px] sm:h-[48px] px-5 sm:px-6 bg-[#151816] text-[#E9B96E] font-mono text-[10px] sm:text-[11px] font-semibold tracking-[0.05em] uppercase border border-[#E9B96E]/40 rounded-[4px] hover:bg-[#E9B96E] hover:text-[#090A0A] hover:border-[#E9B96E] active:scale-[0.98] transition-all duration-[200ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E9B96E] shadow-sm hover:shadow-[0_0_20px_rgba(233,185,110,0.25)]"
+                  >
+                    <span>EXPLORE DEMO</span>
+                    <ArrowRight
+                      size={14}
+                      className="transition-transform duration-[220ms] group-hover:translate-x-1"
+                    />
+                  </button>
+                  <a
+                    href="#impact-trace"
+                    className="inline-flex items-center justify-center h-[46px] sm:h-[48px] px-4 sm:px-5 bg-transparent text-[#A0A79F] hover:text-[#F0F2ED] font-mono text-[10px] sm:text-[11px] tracking-[0.05em] uppercase border border-[#292E2A] rounded-[4px] hover:border-[#6E776F] hover:bg-[#101211] active:scale-[0.98] transition-all duration-[200ms]"
+                  >
+                    HOW IT WORKS
+                  </a>
+                </>
+              )}
             </div>
 
             {/* Supporting Metadata Label */}

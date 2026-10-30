@@ -6,6 +6,7 @@ import { ApplicationSidebar } from "@/components/app-shell/application-sidebar";
 import { ApplicationHeader } from "@/components/app-shell/application-header";
 import { MobileNavDrawer } from "@/components/app-shell/mobile-nav-drawer";
 import { ConnectGitHubModal } from "@/components/app-shell/connect-github-modal";
+import { DemoBanner } from "@/components/demo/demo-banner";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function ApplicationLayout({
@@ -64,6 +65,9 @@ export default function ApplicationLayout({
           onToggleMobileNav={() => setMobileNavOpen((prev) => !prev)}
           onOpenConnectModal={() => setConnectModalOpen(true)}
         />
+
+        {/* Demo Mode Persistent Indicator */}
+        <DemoBanner />
 
         {/* Dynamic Page Views */}
         <main className="flex-1 w-full min-w-0 p-4 sm:p-6 lg:p-8 animate-entrance">

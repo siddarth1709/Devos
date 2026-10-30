@@ -8,6 +8,7 @@ import { FindingFilters } from "@/components/review/finding-filters";
 import { FindingsList } from "@/components/review/findings-list";
 import { FindingDetailPanel } from "@/components/review/finding-detail-panel";
 import { useAnalysisReport } from "@/hooks/use-devos-api";
+import { useAuth } from "@/hooks/use-auth";
 import {
   FIXTURE_ANALYSIS_REPORT,
   FIXTURE_EVIDENCES,
@@ -20,9 +21,11 @@ function ReviewPageContent() {
   const repoParam = searchParams.get("repo") || "siddarth1709-Devos";
   const prParam = searchParams.get("pr") || "2";
   const initialFindingId = searchParams.get("findingId") || null;
-  const initialUseFixture = searchParams.get("fixture") === "1";
+  const { isDemo } = useAuth();
+  const initialUseFixture = searchParams.get("fixture") === "1" || isDemo;
 
   const [useFixtureMode, setUseFixtureMode] = useState<boolean>(initialUseFixture);
+  const isEffectiveFixture = isDemo || useFixtureMode;
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(
     initialFindingId
   );
@@ -47,9 +50,9 @@ function ReviewPageContent() {
   // Active report dataset
   const activeReport = useMemo(() => {
     if (liveReport && liveReport.findings.length > 0) return liveReport;
-    if (useFixtureMode) return FIXTURE_ANALYSIS_REPORT;
+    if (isEffectiveFixture) return FIXTURE_ANALYSIS_REPORT;
     return null;
-  }, [liveReport, useFixtureMode]);
+  }, [liveReport, isEffectiveFixture]);
 
   // Filtered & sorted findings
   const filteredFindings = useMemo(() => {

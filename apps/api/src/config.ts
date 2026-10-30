@@ -1,4 +1,35 @@
 import { z } from 'zod';
+import fs from 'node:fs';
+import path from 'node:path';
+
+function loadEnvFile(envPath: string) {
+  try {
+    if (!fs.existsSync(envPath)) return;
+    const content = fs.readFileSync(envPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (process.env[key] === undefined) {
+        process.env[key] = val;
+      }
+    }
+  } catch {
+    // Ignore errors reading .env
+  }
+}
+
+// Load env files if running outside test
+if (process.env.NODE_ENV !== 'test') {
+  loadEnvFile(path.resolve(process.cwd(), '.env'));
+  loadEnvFile(path.resolve(process.cwd(), 'apps/api/.env'));
+}
 
 export const configSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
@@ -15,6 +46,12 @@ export const configSchema = z.object({
   GITHUB_CALLBACK_URL: z.string().default('http://localhost:3001/api/auth/github/callback'),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
   SESSION_SECRET: z.string().default('devos-default-session-secret-key-32-chars-long'),
+  DEVOS_DEMO_MODE: z
+    .preprocess(
+      (val) => val === 'true' || val === true || val === '1',
+      z.boolean()
+    )
+    .default(false),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

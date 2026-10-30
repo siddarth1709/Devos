@@ -242,7 +242,7 @@ export default function RepositoryDetailPage() {
           <div className="p-4 rounded-[4px] bg-[#151816] border border-[#3A4338] text-[12px] font-body text-[#A0A79F] flex items-center justify-between">
             <span>
               {prsErrorObj?.message ||
-                "Unable to load pull requests from backend. Ensure Builder 2 API is listening on port 4000."}
+                "Unable to load pull requests from backend. Ensure DEVOS API is listening on port 3001 or 4000."}
             </span>
             <button
               type="button"

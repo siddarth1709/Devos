@@ -101,6 +101,34 @@ class DevosApiClient {
     });
   }
 
+  // --- Demo Mode Domain ---
+  async createDemoSession(): Promise<{ sessionType: "demo"; user: UserProfile; expiresAt: string }> {
+    return this.request<{ sessionType: "demo"; user: UserProfile; expiresAt: string }>(
+      "/demo/session",
+      { method: "POST" }
+    );
+  }
+
+  async getDemoStatus(): Promise<{
+    isDemo: boolean;
+    sessionType: string | null;
+    user: UserProfile | null;
+    expiresAt?: string;
+  }> {
+    return this.request<{
+      isDemo: boolean;
+      sessionType: string | null;
+      user: UserProfile | null;
+      expiresAt?: string;
+    }>("/demo/status");
+  }
+
+  async logoutDemo(): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>("/demo/logout", {
+      method: "POST",
+    });
+  }
+
   async getGitHubStatus(): Promise<GitHubConnectionState> {
     return this.request<GitHubConnectionState>("/auth/github/status");
   }

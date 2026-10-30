@@ -31,7 +31,7 @@ export function MobileNavDrawer({
 }: MobileNavDrawerProps) {
   const pathname = usePathname();
   const drawerRef = useRef<HTMLDivElement>(null);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isDemo, logout, exitDemo } = useAuth();
   const { data: githubStatus } = useGitHubStatus();
 
   useEffect(() => {
@@ -196,12 +196,16 @@ export function MobileNavDrawer({
                 type="button"
                 onClick={() => {
                   onClose();
-                  logout();
+                  if (isDemo) {
+                    exitDemo();
+                  } else {
+                    logout();
+                  }
                 }}
                 className="w-full flex items-center justify-center gap-1.5 h-[30px] rounded bg-[#F07878]/10 hover:bg-[#F07878]/20 text-[#F07878] font-mono text-[10px] tracking-wider uppercase transition-colors"
               >
                 <LogOut size={12} />
-                <span>Sign Out</span>
+                <span>{isDemo ? "Exit Demo Mode" : "Sign Out"}</span>
               </button>
             ) : (
               <Link
