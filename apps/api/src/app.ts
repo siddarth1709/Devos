@@ -19,6 +19,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options,
   });
 
+  // Attach appConfig to Fastify instance
+  app.decorate('appConfig', appConfig);
+
   // Centralized Error Handler
   app.setErrorHandler(errorHandler);
 
@@ -32,17 +35,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   });
 
-  // CORS restricted to CORS_ORIGIN
+  // CORS restricted to CORS_ORIGIN and FRONTEND_URL with credentials
   await app.register(cors, {
     origin: (origin, cb) => {
       // Allow requests with no origin (like mobile apps, curl, server-to-server)
-      // or requests where the origin matches the configured CORS_ORIGIN
-      if (!origin || origin === appConfig.CORS_ORIGIN) {
+      // or requests where the origin matches the configured CORS_ORIGIN / FRONTEND_URL
+      if (
+        !origin ||
+        origin === appConfig.CORS_ORIGIN ||
+        origin === appConfig.FRONTEND_URL ||
+        origin.startsWith('http://localhost:')
+      ) {
         cb(null, true);
       } else {
         cb(null, false);
       }
     },
+    credentials: true,
   });
 
   // Routes folder registered under /api

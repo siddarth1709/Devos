@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, Geist_Mono } from "next/font/google";
 import { QueryProvider } from "@/providers/query-provider";
+import { AuthProvider } from "@/providers/auth-provider";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -28,6 +29,18 @@ export const metadata: Metadata = {
   title: "DEVOS — Engineering Intelligence",
   description:
     "Understand code changes. Trace engineering impact. Ship with confidence.",
+  icons: {
+    icon: [
+      { url: "/brand/devos-mark.png", sizes: "any" },
+      { url: "/favicon.ico" },
+    ],
+    apple: "/brand/devos-mark.png",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -41,7 +54,9 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${inter.variable} ${geistMono.variable}`}
     >
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

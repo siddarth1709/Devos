@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { PorousLatticeSphere } from "./porous-lattice-sphere";
 
 export function HeroSection() {
   const [magnetPos, setMagnetPos] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
   const primaryCtaRef = useRef<HTMLAnchorElement>(null);
+  const { isAuthenticated } = useAuth();
 
   const handleMouseMove = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -100,12 +103,12 @@ export function HeroSection() {
                   className="transition-transform duration-[220ms] group-hover:translate-x-1.5"
                 />
               </a>
-              <a
-                href="#method"
+              <Link
+                href={isAuthenticated ? "/app" : "/login"}
                 className="inline-flex items-center justify-center h-[46px] sm:h-[48px] px-4 sm:px-5 bg-transparent text-[#F0F2ED] font-mono text-[10px] sm:text-[11px] tracking-[0.05em] uppercase border border-[#292E2A] rounded-[4px] hover:border-[#6E776F] hover:bg-[#101211] active:scale-[0.98] transition-all duration-[200ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B]"
               >
-                HOW IT WORKS
-              </a>
+                {isAuthenticated ? "OPEN CONSOLE" : "SIGN IN WITH GITHUB"}
+              </Link>
             </div>
 
             {/* Supporting Metadata Label */}

@@ -10,6 +10,11 @@ export const configSchema = z.object({
   CORS_ORIGIN: z.string().min(1).default('http://localhost:3000'),
   OLLAMA_BASE_URL: z.string().url().default('http://127.0.0.1:11434'),
   GEMMA_MODEL: z.string().min(1).default('gemma:2b'),
+  GITHUB_CLIENT_ID: z.string().default(''),
+  GITHUB_CLIENT_SECRET: z.string().default(''),
+  GITHUB_CALLBACK_URL: z.string().default('http://localhost:3001/api/auth/github/callback'),
+  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  SESSION_SECRET: z.string().default('devos-default-session-secret-key-32-chars-long'),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowUp } from "lucide-react";
+import { DevosLogo } from "@/components/brand/devos-logo";
 
 export function SiteFooter() {
   const scrollToTop = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -18,16 +19,10 @@ export function SiteFooter() {
           <div className="flex flex-col items-start">
             <Link
               href="/"
-              className="group flex items-center gap-[7px] text-[#F0F2ED] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B] transition-transform duration-200 hover:scale-[1.01]"
+              className="group flex items-center text-[#F0F2ED] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7F36B] transition-transform duration-200 hover:scale-[1.01]"
               aria-label="DEVOS homepage"
             >
-              <span className="font-display text-[21px] font-bold tracking-[-1.2px]">
-                DEVOS
-              </span>
-              <span
-                className="w-[6px] h-[6px] bg-[#C7F36B] inline-block shrink-0 transition-transform duration-300 group-hover:scale-125 group-hover:rotate-45"
-                aria-hidden="true"
-              />
+              <DevosLogo size="sm" />
             </Link>
             <span className="mt-1 font-body text-[13px] text-[#A0A79F]">
               Engineering Intelligence

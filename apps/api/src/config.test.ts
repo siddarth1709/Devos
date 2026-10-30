@@ -11,6 +11,11 @@ describe('Config Module', () => {
     expect(config.CORS_ORIGIN).toBe('http://localhost:3000');
     expect(config.OLLAMA_BASE_URL).toBe('http://127.0.0.1:11434');
     expect(config.GEMMA_MODEL).toBe('gemma:2b');
+    expect(config.GITHUB_CLIENT_ID).toBe('');
+    expect(config.GITHUB_CLIENT_SECRET).toBe('');
+    expect(config.GITHUB_CALLBACK_URL).toBe('http://localhost:3001/api/auth/github/callback');
+    expect(config.FRONTEND_URL).toBe('http://localhost:3000');
+    expect(config.SESSION_SECRET).toBe('devos-default-session-secret-key-32-chars-long');
   });
 
   it('correctly parses and coerces valid custom environment variables', () => {

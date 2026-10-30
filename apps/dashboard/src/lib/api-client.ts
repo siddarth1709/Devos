@@ -1,4 +1,5 @@
 import type {
+  UserProfile,
   GitHubConnectionState,
   Repository,
   Branch,
@@ -16,7 +17,7 @@ import type {
 import type { ActionRequest, ActionResult } from "@/types/actions";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 class DevosApiClient {
   private baseUrl: string;
@@ -41,6 +42,7 @@ class DevosApiClient {
 
     try {
       const response = await fetch(url, {
+        credentials: "include",
         ...options,
         headers,
         signal: options.signal || controller.signal,
@@ -88,6 +90,17 @@ class DevosApiClient {
   }
 
   // --- Auth & GitHub Domain ---
+  async getCurrentUser(): Promise<UserProfile> {
+    const res = await this.request<{ user: UserProfile }>("/auth/me");
+    return res.user;
+  }
+
+  async logout(): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>("/auth/logout", {
+      method: "POST",
+    });
+  }
+
   async getGitHubStatus(): Promise<GitHubConnectionState> {
     return this.request<GitHubConnectionState>("/auth/github/status");
   }

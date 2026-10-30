@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
 import { useGitHubStatus } from "@/hooks/use-devos-api";
+import { useAuth } from "@/hooks/use-auth";
+import { DevosLogo } from "@/components/brand/devos-logo";
 
 interface ApplicationSidebarProps {
   onOpenConnectModal?: () => void;
@@ -20,6 +22,7 @@ interface ApplicationSidebarProps {
 
 export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarProps) {
   const pathname = usePathname();
+  const { user, isAuthenticated } = useAuth();
   const { data: githubStatus, isError } = useGitHubStatus();
 
   const primaryNav = [
@@ -40,21 +43,15 @@ export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarPro
       aria-label="Application Sidebar"
     >
       {/* Top Logo */}
-      <div className="h-[64px] px-6 flex items-center border-b border-[#1D221F]">
+      <div className="h-[64px] px-5 flex items-center justify-between border-b border-[#1D221F]">
         <Link
           href="/"
-          className="group flex items-center gap-[7px] text-[#F0F2ED] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7F36B]"
+          className="group flex items-center text-[#F0F2ED] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7F36B]"
           aria-label="Return to DEVOS landing page"
         >
-          <span className="font-display text-[21px] font-bold tracking-[-1.2px]">
-            DEVOS
-          </span>
-          <span
-            className="w-[6px] h-[6px] bg-[#C7F36B] inline-block shrink-0 transition-transform duration-300 group-hover:scale-125 group-hover:rotate-45"
-            aria-hidden="true"
-          />
+          <DevosLogo size="sm" />
         </Link>
-        <span className="ml-3 px-1.5 py-0.5 rounded-[2px] bg-[#151816] border border-[#292E2A] font-mono text-[8px] tracking-[0.08em] text-[#A0A79F] uppercase">
+        <span className="px-1.5 py-0.5 rounded-[2px] bg-[#151816] border border-[#292E2A] font-mono text-[8px] tracking-[0.08em] text-[#A0A79F] uppercase">
           CONSOLE
         </span>
       </div>
@@ -152,14 +149,14 @@ export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarPro
             </span>
             <span
               className={`w-2 h-2 rounded-full ${
-                githubStatus?.status === "connected"
+                isAuthenticated || githubStatus?.status === "connected"
                   ? "bg-[#79D69A] shadow-[0_0_8px_rgba(121,214,154,0.5)]"
                   : isError
                   ? "bg-[#E9B96E]"
                   : "bg-[#6E776F]"
               }`}
               title={
-                githubStatus?.status === "connected"
+                isAuthenticated || githubStatus?.status === "connected"
                   ? "Connected to GitHub"
                   : "Not Connected"
               }
@@ -167,30 +164,42 @@ export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarPro
           </div>
 
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-[#101211] border border-[#292E2A] flex items-center justify-center text-[#A0A79F] shrink-0">
-              <GithubIcon size={14} />
-            </div>
+            {isAuthenticated && user?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.avatarUrl}
+                alt={user.login || "Avatar"}
+                className="w-7 h-7 rounded-full border border-[#292E2A] shrink-0"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-[#101211] border border-[#292E2A] flex items-center justify-center text-[#A0A79F] shrink-0">
+                <GithubIcon size={14} />
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <span className="block font-display font-medium text-[12px] text-[#F0F2ED] truncate">
-                {githubStatus?.user?.login || "Local Workspace"}
+                {isAuthenticated && user
+                  ? user.name || user.login
+                  : githubStatus?.user?.login || "Local Workspace"}
               </span>
               <span className="block font-mono text-[9px] text-[#A0A79F] truncate">
-                {githubStatus?.status === "connected"
+                {isAuthenticated && user
+                  ? `@${user.login}`
+                  : githubStatus?.status === "connected"
                   ? "Authorized via GitHub"
                   : "Backend Ready"}
               </span>
             </div>
           </div>
 
-          {githubStatus?.status !== "connected" && onOpenConnectModal && (
-            <button
-              type="button"
-              onClick={onOpenConnectModal}
+          {!isAuthenticated && githubStatus?.status !== "connected" && (
+            <Link
+              href="/login"
               className="mt-1 w-full h-[28px] bg-transparent border border-[#3A4338] text-[#C7F36B] hover:bg-[#C7F36B] hover:text-[#090A0A] font-mono text-[9px] font-semibold tracking-wider uppercase rounded-[3px] transition-all flex items-center justify-center gap-1.5"
             >
-              <span>Connect Repo</span>
+              <span>Sign In</span>
               <ExternalLink size={10} />
-            </button>
+            </Link>
           )}
         </div>
       </div>

@@ -92,7 +92,7 @@ export default function DashboardOverviewPage() {
               </span>
               <p className="font-body text-[12px] text-[#A0A79F] leading-[1.6]">
                 {error?.message ||
-                  "The frontend is connected to http://localhost:4000/api. Once Builder 2 launches the API container, live repositories will populate automatically."}
+                  "The frontend is connected to http://localhost:3001/api. Once Builder 2 launches the API container, live repositories will populate automatically."}
               </p>
             </div>
           </div>

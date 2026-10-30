@@ -14,6 +14,9 @@ import {
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
 import { useGitHubStatus } from "@/hooks/use-devos-api";
+import { useAuth } from "@/hooks/use-auth";
+import { LogOut } from "lucide-react";
+import { DevosLogo } from "@/components/brand/devos-logo";
 
 interface MobileNavDrawerProps {
   isOpen: boolean;
@@ -28,6 +31,7 @@ export function MobileNavDrawer({
 }: MobileNavDrawerProps) {
   const pathname = usePathname();
   const drawerRef = useRef<HTMLDivElement>(null);
+  const { user, isAuthenticated, logout } = useAuth();
   const { data: githubStatus } = useGitHubStatus();
 
   useEffect(() => {
@@ -77,15 +81,9 @@ export function MobileNavDrawer({
             <Link
               href="/"
               onClick={onClose}
-              className="flex items-center gap-[7px] text-[#F0F2ED]"
+              className="flex items-center text-[#F0F2ED]"
             >
-              <span className="font-display text-[20px] font-bold tracking-[-1.2px]">
-                DEVOS
-              </span>
-              <span
-                className="w-[6px] h-[6px] bg-[#C7F36B] inline-block shrink-0"
-                aria-hidden="true"
-              />
+              <DevosLogo size="sm" />
             </Link>
             <button
               type="button"
@@ -167,24 +165,53 @@ export function MobileNavDrawer({
 
         {/* Bottom User / Account Status */}
         <div className="pt-4 border-t border-[#1D221F]">
-          <div className="p-3 bg-[#151816] rounded-[4px] border border-[#222724]">
-            <div className="flex items-center gap-2">
-              <GithubIcon size={14} className="text-[#A0A79F]" />
-              <span className="font-mono text-[11px] text-[#F0F2ED] truncate">
-                {githubStatus?.user?.login || "Not connected"}
-              </span>
+          <div className="p-3 bg-[#151816] rounded-[4px] border border-[#222724] space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              {isAuthenticated && user?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatarUrl}
+                  alt={user.login || "Avatar"}
+                  className="w-6 h-6 rounded-full border border-[#292E2A] shrink-0"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-[#101211] border border-[#292E2A] flex items-center justify-center text-[#A0A79F] shrink-0">
+                  <GithubIcon size={12} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <span className="block font-mono text-[11px] text-[#F0F2ED] truncate">
+                  {isAuthenticated && user ? user.name || user.login : githubStatus?.user?.login || "Not connected"}
+                </span>
+                {isAuthenticated && user && (
+                  <span className="block font-mono text-[9px] text-[#A0A79F] truncate">
+                    @{user.login}
+                  </span>
+                )}
+              </div>
             </div>
-            {githubStatus?.status !== "connected" && onOpenConnectModal && (
+
+            {isAuthenticated ? (
               <button
                 type="button"
                 onClick={() => {
                   onClose();
-                  onOpenConnectModal();
+                  logout();
                 }}
-                className="mt-2.5 w-full h-[32px] bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] font-semibold tracking-wider uppercase rounded-[3px] transition-all"
+                className="w-full flex items-center justify-center gap-1.5 h-[30px] rounded bg-[#F07878]/10 hover:bg-[#F07878]/20 text-[#F07878] font-mono text-[10px] tracking-wider uppercase transition-colors"
               >
-                Connect GitHub
+                <LogOut size={12} />
+                <span>Sign Out</span>
               </button>
+            ) : (
+              <Link
+                href="/login"
+                onClick={onClose}
+                className="w-full flex items-center justify-center gap-1.5 h-[32px] bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] font-semibold tracking-wider uppercase rounded-[3px] transition-all"
+              >
+                <GithubIcon size={12} />
+                <span>Sign In With GitHub</span>
+              </Link>
             )}
           </div>
         </div>
