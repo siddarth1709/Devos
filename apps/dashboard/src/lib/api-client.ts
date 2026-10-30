@@ -7,6 +7,10 @@ import type {
   FileDiffData,
   DiffHunk,
   AnalysisJob,
+  DependencyGraphData,
+  AnalysisReport,
+  Evidence,
+  Recommendation,
   ApiError,
 } from "@/types/api";
 
@@ -174,7 +178,46 @@ class DevosApiClient {
   }
 
   async getAnalysisStatus(jobId: string): Promise<AnalysisJob> {
-    return this.request<AnalysisJob>(`/analysis/${encodeURIComponent(jobId)}`);
+    return this.request<AnalysisJob>(`/analyses/${encodeURIComponent(jobId)}`);
+  }
+
+  // --- Engineering Graph Domain ---
+  async getDependencyGraph(
+    repositoryId: string,
+    analysisId?: string
+  ): Promise<DependencyGraphData> {
+    const query = analysisId ? `?analysisId=${encodeURIComponent(analysisId)}` : "";
+    return this.request<DependencyGraphData>(
+      `/repositories/${encodeURIComponent(repositoryId)}/graph${query}`
+    );
+  }
+
+  // --- AI Code Review Domain ---
+  async getAnalysisReport(analysisId: string): Promise<AnalysisReport> {
+    const response = await this.request<{
+      job: AnalysisJob;
+      report: AnalysisReport | null;
+    }>(`/analyses/${encodeURIComponent(analysisId)}`);
+
+    if (!response.report) {
+      throw {
+        message: `Analysis job ${analysisId} has not completed report generation yet.`,
+        status: 404,
+        code: "REPORT_NOT_READY",
+      } as ApiError;
+    }
+
+    return response.report;
+  }
+
+  async getEvidence(evidenceId: string): Promise<Evidence> {
+    return this.request<Evidence>(`/evidence/${encodeURIComponent(evidenceId)}`);
+  }
+
+  async getRecommendations(analysisId: string): Promise<Recommendation[]> {
+    return this.request<Recommendation[]>(
+      `/analyses/${encodeURIComponent(analysisId)}/recommendations`
+    );
   }
 }
 
