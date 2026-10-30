@@ -13,6 +13,7 @@ import type {
   Recommendation,
   ApiError,
 } from "@/types/api";
+import type { ActionRequest, ActionResult } from "@/types/actions";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
@@ -218,6 +219,37 @@ class DevosApiClient {
     return this.request<Recommendation[]>(
       `/analyses/${encodeURIComponent(analysisId)}/recommendations`
     );
+  }
+
+  // --- Secure Actions Domain ---
+  async createAction(payload: {
+    type: string;
+    target: string;
+    params?: Record<string, unknown>;
+    requestedBy?: string;
+  }): Promise<ActionRequest> {
+    return this.request<ActionRequest>("/actions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async approveAction(
+    actionId: string,
+    payload: { approved: boolean; reason?: string }
+  ): Promise<{ action: ActionRequest; result: ActionResult | null }> {
+    return this.request<{ action: ActionRequest; result: ActionResult | null }>(
+      `/actions/${encodeURIComponent(actionId)}/approve`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  }
+
+  async getActions(repositoryId?: string): Promise<ActionRequest[]> {
+    const query = repositoryId ? `?repositoryId=${encodeURIComponent(repositoryId)}` : "";
+    return this.request<ActionRequest[]>(`/actions${query}`);
   }
 }
 

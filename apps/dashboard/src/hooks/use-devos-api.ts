@@ -16,6 +16,7 @@ import type {
   Recommendation,
   ApiError,
 } from "@/types/api";
+import type { ActionRequest, ActionResult } from "@/types/actions";
 
 export const queryKeys = {
   githubStatus: ["auth", "github", "status"] as const,
@@ -36,6 +37,7 @@ export const queryKeys = {
   evidence: (evidenceId: string) => ["evidence", evidenceId] as const,
   recommendations: (analysisId: string) =>
     ["analysis", analysisId, "recommendations"] as const,
+  actions: (repoId?: string) => ["actions", repoId || "all"] as const,
 };
 
 export function useGitHubStatus() {
@@ -173,5 +175,46 @@ export function useRecommendations(analysisId: string) {
     staleTime: 60_000,
   });
 }
+
+export function useActions(repoId?: string) {
+  return useQuery<ActionRequest[], ApiError>({
+    queryKey: queryKeys.actions(repoId),
+    queryFn: () => api.getActions(repoId),
+    retry: false,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateAction() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ActionRequest,
+    ApiError,
+    { type: string; target: string; params?: Record<string, unknown>; requestedBy?: string }
+  >({
+    mutationFn: (payload) => api.createAction(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["actions"] });
+    },
+  });
+}
+
+export function useApproveAction() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { action: ActionRequest; result: ActionResult | null },
+    ApiError,
+    { actionId: string; approved: boolean; reason?: string }
+  >({
+    mutationFn: ({ actionId, approved, reason }) =>
+      api.approveAction(actionId, { approved, reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["actions"] });
+    },
+  });
+}
+
 
 

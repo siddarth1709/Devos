@@ -4,6 +4,8 @@ import type {
   Evidence,
   Recommendation,
 } from "@/types/api";
+import type { GuardEvaluation, GuardHistoricalRun } from "@/types/guard";
+import type { ActionDefinition, ActionRecord } from "@/types/actions";
 
 /**
  * Canonical development fixtures directly aligned with Builder 2 specifications
@@ -331,4 +333,345 @@ export const FIXTURE_RECOMMENDATIONS: Recommendation[] = [
     rationale: "Enforces safe operational memory ceiling under traffic spikes.",
   },
 ];
+
+// ============================================================================
+// Pre-ship Guard Development Specification Fixtures
+// Strictly isolated for developer inspection of docs/api-contract.md schemas
+// ============================================================================
+
+export const FIXTURE_GUARD_EVALUATION: GuardEvaluation = {
+  repositoryId: "siddarth1709-Devos",
+  pullRequestId: "2",
+  revision: "2b73459e2a74",
+  readiness: "conditional",
+  readinessReason:
+    "1 blocking validation issue and 1 outstanding regression warning must be addressed before deployment. Automated test failure detected on malformed bearer headers.",
+  lastEvaluatedAt: "2026-10-31T01:05:42.000Z",
+  isBackendConnected: true,
+  blockers: [
+    {
+      id: "blk_01",
+      severity: "high",
+      title: "Unvalidated authorization bearer token format",
+      explanation:
+        "Bearer token structure parsed without separator count verification triggers uncaught 500 crashes instead of 401 unauthorized.",
+      filePath: "apps/api/src/auth/jwt.ts",
+      line: 45,
+      evidenceIds: ["ev_diff_01", "ev_ast_02"],
+      findingId: "f_sec_01",
+      symbolId: "sym_verifyToken",
+    },
+  ],
+  warnings: [
+    {
+      id: "wrn_01",
+      title: "Unbounded cache growth in downstream tokenCache",
+      explanation:
+        "Downstream tokenCache references modified verifyToken output without eviction TTL policy.",
+      impact: "Linear memory growth under continuous traffic bursts.",
+      suggestedNextStep:
+        "Introduce LRU cache cap of 10,000 entries and 15-minute TTL.",
+      evidenceIds: ["ev_ast_02", "ev_test_03"],
+      findingId: "f_perf_02",
+    },
+  ],
+  outstandingChecks: [
+    "Production traffic telemetry distribution for bearer token format",
+    "End-to-end integration test coverage for tokens without dot separators",
+  ],
+  checks: [
+    {
+      id: "chk_ci_01",
+      category: "change_integrity",
+      name: "AST Symbol Consistency",
+      status: "passed",
+      description: "All exported symbols resolve unambiguously in the compiler AST.",
+      evidenceSource: "typescript-ast",
+      lastExecutedAt: "2026-10-31T01:05:00.000Z",
+    },
+    {
+      id: "chk_ci_02",
+      category: "change_integrity",
+      name: "Blast Radius Boundedness",
+      status: "warning",
+      description:
+        "Downstream ripple effect extends to 3 dependent symbols across 2 modules.",
+      evidenceSource: "dependency-graph-tracer",
+      lastExecutedAt: "2026-10-31T01:05:05.000Z",
+    },
+    {
+      id: "chk_cq_01",
+      category: "code_quality",
+      name: "TypeScript Strict Compile",
+      status: "passed",
+      description: "0 typecheck errors with strict mode enabled.",
+      evidenceSource: "tsc",
+      lastExecutedAt: "2026-10-31T01:05:10.000Z",
+    },
+    {
+      id: "chk_cq_02",
+      category: "code_quality",
+      name: "Input Bounds Validation",
+      status: "failed",
+      description: "verifyToken lacks array length guard before index access.",
+      evidenceSource: "ast-symbol-tracer",
+      lastExecutedAt: "2026-10-31T01:05:12.000Z",
+      findingId: "f_sec_01",
+      filePath: "apps/api/src/auth/jwt.ts",
+      line: 45,
+    },
+    {
+      id: "chk_th_01",
+      category: "test_health",
+      name: "Auth Middleware Integration Suite",
+      status: "failed",
+      description: "1 test failed: rejects token missing period separators.",
+      evidenceSource: "vitest-runner",
+      lastExecutedAt: "2026-10-31T01:05:22.000Z",
+      findingId: "f_sec_01",
+    },
+    {
+      id: "chk_th_02",
+      category: "test_health",
+      name: "Regression Test Coverage",
+      status: "warning",
+      description: "Line coverage on jwt.ts is 78% (below 85% recommended threshold).",
+      evidenceSource: "vitest-coverage",
+      lastExecutedAt: "2026-10-31T01:05:25.000Z",
+    },
+    {
+      id: "chk_dh_01",
+      category: "dependency_health",
+      name: "Known Vulnerability Audit",
+      status: "passed",
+      description: "0 critical or high CVEs identified in installed packages.",
+      evidenceSource: "pnpm-audit",
+      lastExecutedAt: "2026-10-31T01:05:30.000Z",
+    },
+    {
+      id: "chk_dh_02",
+      category: "dependency_health",
+      name: "Dependency Version Compatibility",
+      status: "passed",
+      description: "All workspace packages adhere to defined semver ranges.",
+      evidenceSource: "semver-checker",
+      lastExecutedAt: "2026-10-31T01:05:32.000Z",
+    },
+    {
+      id: "chk_rc_01",
+      category: "runtime_configuration",
+      name: "Environment Variable Schema",
+      status: "passed",
+      description: "All required runtime keys declared in .env.example with Zod validators.",
+      evidenceSource: "zod-config-validator",
+      lastExecutedAt: "2026-10-31T01:05:35.000Z",
+    },
+    {
+      id: "chk_rc_02",
+      category: "runtime_configuration",
+      name: "Production Telemetry Baseline",
+      status: "unavailable",
+      description:
+        "Telemetry ingestion pipeline disconnected. Production error baselines unavailable.",
+      evidenceSource: "unscoped",
+      lastExecutedAt: null,
+    },
+    {
+      id: "chk_ri_01",
+      category: "review_integrity",
+      name: "Grounded Evidence Validation",
+      status: "passed",
+      description: "4 of 4 review findings reference validated AST diff artifacts.",
+      evidenceSource: "evidence-reconciler",
+      lastExecutedAt: "2026-10-31T01:05:40.000Z",
+    },
+    {
+      id: "chk_ri_02",
+      category: "review_integrity",
+      name: "Unresolved Review Blockers",
+      status: "failed",
+      description: "1 High-severity finding (f_sec_01) requires confirmation or patch.",
+      evidenceSource: "gemma-review-evaluator",
+      lastExecutedAt: "2026-10-31T01:05:42.000Z",
+      findingId: "f_sec_01",
+    },
+  ],
+};
+
+export const FIXTURE_GUARD_HISTORY: GuardHistoricalRun[] = [
+  {
+    runId: "run_grd_908123",
+    timestamp: "2026-10-31T01:05:42.000Z",
+    readiness: "conditional",
+    blockerCount: 1,
+    warningCount: 1,
+    revision: "2b73459e",
+  },
+  {
+    runId: "run_grd_908001",
+    timestamp: "2026-10-30T19:22:15.000Z",
+    readiness: "unsafe",
+    blockerCount: 3,
+    warningCount: 2,
+    revision: "1b0fc002",
+  },
+];
+
+// ============================================================================
+// Secure Actions Catalogue Specification
+// ============================================================================
+
+export const ACTION_CATALOGUE: ActionDefinition[] = [
+  {
+    id: "act_lint",
+    type: "run_lint",
+    name: "Run ESLint Checks",
+    description: "Executes configured workspace ESLint rules against changed files.",
+    category: "code_quality",
+    requiredPermissions: ["read:repo"],
+    requiresApproval: false,
+    modifiesState: false,
+    isReversible: true,
+    defaultParams: { scope: "changed_files" },
+    potentialImpact: "Read-only static verification; zero filesystem mutations.",
+  },
+  {
+    id: "act_typecheck",
+    type: "run_typecheck",
+    name: "Run TypeScript Compile Verification",
+    description: "Validates AST types and compiler constraints with tsc --noEmit.",
+    category: "code_quality",
+    requiredPermissions: ["read:repo"],
+    requiresApproval: false,
+    modifiesState: false,
+    isReversible: true,
+    defaultParams: { noEmit: true },
+    potentialImpact: "Read-only type checker pass; zero filesystem mutations.",
+  },
+  {
+    id: "act_test",
+    type: "run_tests",
+    name: "Execute Unit & Integration Tests",
+    description: "Runs targeted Vitest test suites across affected modules.",
+    category: "code_quality",
+    requiredPermissions: ["read:repo", "execute:tests"],
+    requiresApproval: true,
+    modifiesState: false,
+    isReversible: true,
+    defaultParams: { filter: "auth" },
+    potentialImpact:
+      "Spawns ephemeral test runner processes; consumes CPU resources.",
+  },
+  {
+    id: "act_rel_notes",
+    type: "generate_release_notes",
+    name: "Generate Release Notes",
+    description:
+      "Synthesizes change summaries and impact radius into structured changelog format.",
+    category: "change_management",
+    requiredPermissions: ["read:diff", "read:metadata"],
+    requiresApproval: false,
+    modifiesState: false,
+    isReversible: true,
+    defaultParams: { format: "markdown" },
+    potentialImpact: "Generates report text draft without committing.",
+  },
+  {
+    id: "act_commit_msg",
+    type: "prepare_commit_message",
+    name: "Prepare Conventional Commit Message",
+    description: "Drafts conventional commit message based on AST diff symbols.",
+    category: "change_management",
+    requiredPermissions: ["read:diff"],
+    requiresApproval: false,
+    modifiesState: false,
+    isReversible: true,
+    defaultParams: { convention: "angular" },
+    potentialImpact: "Proposes message string; does not commit.",
+  },
+  {
+    id: "act_pr_summary",
+    type: "prepare_pr_summary",
+    name: "Draft Pull Request Description",
+    description: "Constructs evidence-backed PR overview with blast radius analysis.",
+    category: "change_management",
+    requiredPermissions: ["read:diff", "read:prs"],
+    requiresApproval: false,
+    modifiesState: false,
+    isReversible: true,
+    defaultParams: { includeEvidence: true },
+    potentialImpact: "Generates draft markdown body for developer review.",
+  },
+  {
+    id: "act_dep_inspect",
+    type: "inspect_dependency_changes",
+    name: "Inspect Dependency Manifest Changes",
+    description: "Audits package.json and pnpm-lock.yaml for version drift and licenses.",
+    category: "repository_maintenance",
+    requiredPermissions: ["read:dependencies"],
+    requiresApproval: false,
+    modifiesState: false,
+    isReversible: true,
+    defaultParams: { verifyLicenses: true },
+    potentialImpact: "Read-only manifest inspection; zero lockfile mutations.",
+  },
+  {
+    id: "act_dep_report",
+    type: "generate_dependency_report",
+    name: "Generate Dependency Audit Report",
+    description:
+      "Compiles detailed SBOM artifact and security advisory ledger to disk.",
+    category: "repository_maintenance",
+    requiredPermissions: ["read:dependencies", "write:report"],
+    requiresApproval: true,
+    modifiesState: true,
+    isReversible: true,
+    defaultParams: { outputPath: "docs/dependency-audit.md" },
+    potentialImpact:
+      "Writes audit artifact file to local repository filesystem at specified path.",
+  },
+];
+
+export const FIXTURE_ACTION_HISTORY: ActionRecord[] = [
+  {
+    id: "act_rec_01",
+    definitionId: "act_test",
+    name: "Execute Unit & Integration Tests",
+    type: "run_tests",
+    target: "apps/api",
+    category: "code_quality",
+    params: { filter: "auth" },
+    status: "failed",
+    requestedBy: "developer",
+    requestedAt: "2026-10-31T01:15:00.000Z",
+    approvedAt: "2026-10-31T01:15:01.000Z",
+    executedAt: "2026-10-31T01:15:05.000Z",
+    durationMs: 4120,
+    output: {
+      testsTotal: 6,
+      testsPassed: 5,
+      testsFailed: 1,
+      failureMessage: "AssertionError: expected status 401 but got 500",
+    },
+    error: "Test suite failed: rejects token missing period separators",
+  },
+  {
+    id: "act_rec_02",
+    definitionId: "act_lint",
+    name: "Run ESLint Checks",
+    type: "run_lint",
+    target: "apps/dashboard",
+    category: "code_quality",
+    params: { scope: "changed_files" },
+    status: "completed",
+    requestedBy: "developer",
+    requestedAt: "2026-10-31T01:10:00.000Z",
+    approvedAt: null,
+    executedAt: "2026-10-31T01:10:04.000Z",
+    durationMs: 3800,
+    output: { problems: 0, errors: 0, warnings: 0 },
+    error: null,
+  },
+];
+
 
