@@ -37,8 +37,10 @@ model Analysis {
   recommendations  Recommendation[]
   investigations   Investigation[]
   rejectedClaims   RejectedClaim[]
+  dependencyNodes  DependencyNode[]
   dependencyEdges  DependencyEdge[]
   actionExecutions ActionExecution[]
+  symbols          Symbol[]
 }
 
 model ChangedFile {
@@ -55,31 +57,82 @@ model ChangedFile {
 }
 
 model Symbol {
-  id           String     @id @default(cuid())
-  repositoryId String
-  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  name         String
-  kind         String
-  file         String
-  lineStart    Int
-  lineEnd      Int
-  commitSha    String
-  collector    String
-  createdAt    DateTime   @default(now())
+  id              String      @id @default(cuid())
+  repositoryId    String
+  repository      Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  analysisId      String?
+  analysis        Analysis?   @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  symbolKey       String
+  name            String
+  kind            String
+  file            String
+  lineStart       Int
+  lineEnd         Int
+  colStart        Int?
+  colEnd          Int?
+  isExported      Boolean     @default(false)
+  containerName   String?
+  signature       String?
+  importKind      String?
+  importedName    String?
+  localName       String?
+  moduleSpecifier String?
+  exportKind      String?
+  exportAlias     String?
+  isReExport      Boolean     @default(false)
+  reExportModule  String?
+  metadata        String?
+  commitSha       String
+  collector       String
+  createdAt       DateTime    @default(now())
+
+  @@index([symbolKey])
+  @@index([analysisId])
+  @@index([repositoryId])
 }
 
 model DependencyEdge {
-  id         String    @id @default(cuid())
-  analysisId String?
-  analysis   Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  from       String
-  to         String
-  kind       String
-  sourceFile String
-  sourceLine Int
-  commitSha  String
-  collector  String
-  createdAt  DateTime  @default(now())
+  id               String    @id @default(cuid())
+  analysisId       String?
+  analysis         Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  repositoryId     String?
+  edgeKey          String    @default("")
+  from             String
+  to               String
+  kind             String
+  sourceFile       String
+  sourceLine       Int
+  sourceCol        Int?
+  resolutionStatus String    @default("resolved")
+  commitSha        String
+  collector        String
+  metadata         String?
+  createdAt        DateTime  @default(now())
+
+  @@index([analysisId])
+  @@index([edgeKey])
+  @@index([from])
+  @@index([to])
+}
+
+model DependencyNode {
+  id           String    @id @default(cuid())
+  analysisId   String
+  analysis     Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  nodeKey      String
+  nodeType     String
+  name         String
+  path         String?
+  symbolKey    String?
+  repositoryId String
+  commitSha    String
+  collector    String
+  metadata     String?
+  createdAt    DateTime  @default(now())
+
+  @@unique([analysisId, nodeKey])
+  @@index([nodeKey])
+  @@index([analysisId])
 }
 
 model Evidence {

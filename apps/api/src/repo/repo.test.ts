@@ -31,8 +31,13 @@ import {
   listChangedFilesByAnalysis,
   createSymbol,
   listSymbolsByRepository,
+  createDependencyNode,
+  listDependencyNodesByAnalysis,
   createDependencyEdge,
+  createDependencyEdges,
   listDependencyEdgesByAnalysis,
+  deleteDependencyEdgesByAnalysis,
+  deleteDependencyNodesByAnalysis,
   createHypothesis,
   listHypothesesByAnalysis,
   createRecommendation,
@@ -68,21 +73,25 @@ describe('Typed Data-Access Layer & Prisma Persistence', () => {
       },
     });
 
-    // Read and apply migration SQL
-    const migrationSqlPath = path.resolve(
-      __dirname,
-      '../../prisma/migrations/20261031000000_init_models/migration.sql'
-    );
-    const migrationSql = fs.readFileSync(migrationSqlPath, 'utf8');
+    // Read and apply all migration SQL files in order
+    const migrationsDir = path.resolve(__dirname, '../../prisma/migrations');
+    const migrationDirs = fs
+      .readdirSync(migrationsDir)
+      .filter((d) => fs.statSync(path.join(migrationsDir, d)).isDirectory())
+      .sort();
 
-    // Split statements by semicolon and execute each non-empty statement
-    const statements = migrationSql
-      .split(';')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    for (const statement of statements) {
-      await testPrisma.$executeRawUnsafe(statement);
+    for (const dir of migrationDirs) {
+      const sqlFile = path.join(migrationsDir, dir, 'migration.sql');
+      if (fs.existsSync(sqlFile)) {
+        const migrationSql = fs.readFileSync(sqlFile, 'utf8');
+        const statements = migrationSql
+          .split(';')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        for (const statement of statements) {
+          await testPrisma.$executeRawUnsafe(statement);
+        }
+      }
     }
   });
 
@@ -174,33 +183,67 @@ describe('Typed Data-Access Layer & Prisma Persistence', () => {
       const sym = await createSymbol(
         {
           repositoryId: repo.id,
+          symbolKey: 'src/auth.ts#authenticateUser:function:12:1',
           name: 'authenticateUser',
           kind: 'function',
           file: 'src/auth.ts',
           lineStart: 12,
           lineEnd: 45,
+          isExported: true,
+          importKind: null,
+          importedName: null,
+          localName: null,
+          moduleSpecifier: null,
+          exportKind: 'named',
+          exportAlias: null,
+          isReExport: false,
+          reExportModule: null,
+          metadata: JSON.stringify({ verified: true }),
           commitSha: headSha,
           collector: 'ast-collector',
         },
         testPrisma
       );
       expect(sym.id).toBeDefined();
+      expect(sym.symbolKey).toBe('src/auth.ts#authenticateUser:function:12:1');
+      expect(sym.isExported).toBe(true);
+      expect(sym.exportKind).toBe('named');
 
       // DependencyEdge
       const dep = await createDependencyEdge(
         {
           analysisId: analysis.id,
-          from: 'src/auth.ts',
-          to: 'src/crypto.ts',
-          kind: 'import',
+          repositoryId: repo.id,
+          edgeKey: 'src/auth.ts->src/crypto.ts:imports_module:2:1',
+          from: 'file:src/auth.ts',
+          to: 'file:src/crypto.ts',
+          kind: 'imports_module',
           sourceFile: 'src/auth.ts',
           sourceLine: 2,
           commitSha: headSha,
-          collector: 'import-analyzer',
+          collector: 'dependency-graph-builder',
         },
         testPrisma
       );
       expect(dep.id).toBeDefined();
+
+      const node = await createDependencyNode(
+        {
+          analysisId: analysis.id,
+          nodeKey: 'file:src/auth.ts',
+          nodeType: 'file',
+          name: 'auth.ts',
+          path: 'src/auth.ts',
+          repositoryId: repo.id,
+          commitSha: headSha,
+          collector: 'dependency-graph-builder',
+        },
+        testPrisma
+      );
+      expect(node.id).toBeDefined();
+
+      const nodes = await listDependencyNodesByAnalysis(analysis.id, testPrisma);
+      expect(nodes.length).toBe(1);
 
       // Evidence
       const evidence = await createEvidence(
@@ -511,6 +554,7 @@ describe('Typed Data-Access Layer & Prisma Persistence', () => {
       const symbol = await createSymbol(
         {
           repositoryId: repo.id,
+          symbolKey: 'src/main.ts#CascadedSymbol:class:1:1',
           name: 'CascadedSymbol',
           kind: 'class',
           file: 'src/main.ts',

@@ -10,6 +10,7 @@ export const configSchema = z.object({
   CORS_ORIGIN: z.string().min(1).default('http://localhost:3000'),
   OLLAMA_BASE_URL: z.string().url().default('http://127.0.0.1:11434'),
   GEMMA_MODEL: z.string().min(1).default('gemma:2b'),
+  ALLOWED_REPO_ROOT: z.string().default(process.cwd()),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -28,4 +29,3 @@ export function loadConfig(rawEnv: Record<string, string | undefined> = process.
 }
 
 export const config = loadConfig();
-
