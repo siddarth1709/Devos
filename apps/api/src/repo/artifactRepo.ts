@@ -2,6 +2,7 @@ import {
   ActionExecution,
   ChangedFile,
   DependencyEdge,
+  DependencyNode,
   Hypothesis,
   Investigation,
   Recommendation,
@@ -54,11 +55,27 @@ export async function updateChangedFile(
 // --- Symbol ---
 export interface CreateSymbolInput {
   repositoryId: string;
+  analysisId?: string | null;
+  symbolKey: string;
   name: string;
   kind: string;
   file: string;
   lineStart: number;
   lineEnd: number;
+  colStart?: number | null;
+  colEnd?: number | null;
+  isExported?: boolean;
+  containerName?: string | null;
+  signature?: string | null;
+  importKind?: string | null;
+  importedName?: string | null;
+  localName?: string | null;
+  moduleSpecifier?: string | null;
+  exportKind?: string | null;
+  exportAlias?: string | null;
+  isReExport?: boolean;
+  reExportModule?: string | null;
+  metadata?: string | null;
   commitSha: string;
   collector: string;
 }
@@ -68,6 +85,17 @@ export async function createSymbol(
   client: DbClient = prisma
 ): Promise<Symbol> {
   return client.symbol.create({ data: input });
+}
+
+export async function createSymbols(
+  inputs: CreateSymbolInput[],
+  client: DbClient = prisma
+): Promise<number> {
+  if (inputs.length === 0) return 0;
+  const result = await client.symbol.createMany({
+    data: inputs,
+  });
+  return result.count;
 }
 
 export async function getSymbolById(
@@ -84,6 +112,29 @@ export async function listSymbolsByRepository(
   return client.symbol.findMany({ where: { repositoryId } });
 }
 
+export async function listSymbolsByAnalysis(
+  analysisId: string,
+  client: DbClient = prisma
+): Promise<Symbol[]> {
+  return client.symbol.findMany({ where: { analysisId } });
+}
+
+export async function getSymbolByKeyAndAnalysis(
+  analysisId: string,
+  symbolKey: string,
+  client: DbClient = prisma
+): Promise<Symbol | null> {
+  return client.symbol.findFirst({ where: { analysisId, symbolKey } });
+}
+
+export async function deleteSymbolsByAnalysis(
+  analysisId: string,
+  client: DbClient = prisma
+): Promise<number> {
+  const result = await client.symbol.deleteMany({ where: { analysisId } });
+  return result.count;
+}
+
 export async function updateSymbol(
   id: string,
   data: Partial<CreateSymbolInput>,
@@ -92,16 +143,64 @@ export async function updateSymbol(
   return client.symbol.update({ where: { id }, data });
 }
 
-// --- DependencyEdge ---
+export interface CreateDependencyNodeInput {
+  analysisId: string;
+  nodeKey: string;
+  nodeType: string;
+  name: string;
+  path?: string | null;
+  symbolKey?: string | null;
+  repositoryId: string;
+  commitSha: string;
+  collector: string;
+  metadata?: string | null;
+}
+
+export async function createDependencyNode(
+  input: CreateDependencyNodeInput,
+  client: DbClient = prisma
+): Promise<DependencyNode> {
+  return client.dependencyNode.create({ data: input });
+}
+
+export async function createDependencyNodes(
+  inputs: CreateDependencyNodeInput[],
+  client: DbClient = prisma
+): Promise<number> {
+  if (inputs.length === 0) return 0;
+  const result = await client.dependencyNode.createMany({ data: inputs });
+  return result.count;
+}
+
+export async function listDependencyNodesByAnalysis(
+  analysisId: string,
+  client: DbClient = prisma
+): Promise<DependencyNode[]> {
+  return client.dependencyNode.findMany({ where: { analysisId } });
+}
+
+export async function deleteDependencyNodesByAnalysis(
+  analysisId: string,
+  client: DbClient = prisma
+): Promise<number> {
+  const result = await client.dependencyNode.deleteMany({ where: { analysisId } });
+  return result.count;
+}
+
 export interface CreateDependencyEdgeInput {
   analysisId?: string | null;
+  repositoryId?: string | null;
+  edgeKey?: string;
   from: string;
   to: string;
   kind: string;
   sourceFile: string;
   sourceLine: number;
+  sourceCol?: number | null;
+  resolutionStatus?: string;
   commitSha: string;
   collector: string;
+  metadata?: string | null;
 }
 
 export async function createDependencyEdge(
@@ -109,6 +208,15 @@ export async function createDependencyEdge(
   client: DbClient = prisma
 ): Promise<DependencyEdge> {
   return client.dependencyEdge.create({ data: input });
+}
+
+export async function createDependencyEdges(
+  inputs: CreateDependencyEdgeInput[],
+  client: DbClient = prisma
+): Promise<number> {
+  if (inputs.length === 0) return 0;
+  const result = await client.dependencyEdge.createMany({ data: inputs });
+  return result.count;
 }
 
 export async function getDependencyEdgeById(
@@ -123,6 +231,14 @@ export async function listDependencyEdgesByAnalysis(
   client: DbClient = prisma
 ): Promise<DependencyEdge[]> {
   return client.dependencyEdge.findMany({ where: { analysisId } });
+}
+
+export async function deleteDependencyEdgesByAnalysis(
+  analysisId: string,
+  client: DbClient = prisma
+): Promise<number> {
+  const result = await client.dependencyEdge.deleteMany({ where: { analysisId } });
+  return result.count;
 }
 
 export async function updateDependencyEdge(
