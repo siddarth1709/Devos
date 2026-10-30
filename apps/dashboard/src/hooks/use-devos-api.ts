@@ -10,6 +10,10 @@ import type {
   ChangedFile,
   FileDiffData,
   AnalysisJob,
+  DependencyGraphData,
+  AnalysisReport,
+  Evidence,
+  Recommendation,
   ApiError,
 } from "@/types/api";
 
@@ -26,6 +30,12 @@ export const queryKeys = {
   diff: (repoId: string, prId: string, path: string) =>
     ["repositories", repoId, "pulls", prId, "diff", path] as const,
   analysis: (jobId: string) => ["analysis", jobId] as const,
+  dependencyGraph: (repoId: string, analysisId?: string) =>
+    ["repositories", repoId, "graph", analysisId || "latest"] as const,
+  analysisReport: (analysisId: string) => ["analysis", analysisId, "report"] as const,
+  evidence: (evidenceId: string) => ["evidence", evidenceId] as const,
+  recommendations: (analysisId: string) =>
+    ["analysis", analysisId, "recommendations"] as const,
 };
 
 export function useGitHubStatus() {
@@ -123,4 +133,45 @@ export function useTriggerAnalysis(repoId: string, prId: string) {
     },
   });
 }
+
+export function useDependencyGraph(repoId: string, analysisId?: string) {
+  return useQuery<DependencyGraphData, ApiError>({
+    queryKey: queryKeys.dependencyGraph(repoId, analysisId),
+    queryFn: () => api.getDependencyGraph(repoId, analysisId),
+    enabled: Boolean(repoId),
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useAnalysisReport(analysisId: string) {
+  return useQuery<AnalysisReport, ApiError>({
+    queryKey: queryKeys.analysisReport(analysisId),
+    queryFn: () => api.getAnalysisReport(analysisId),
+    enabled: Boolean(analysisId),
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useEvidence(evidenceId: string) {
+  return useQuery<Evidence, ApiError>({
+    queryKey: queryKeys.evidence(evidenceId),
+    queryFn: () => api.getEvidence(evidenceId),
+    enabled: Boolean(evidenceId),
+    retry: false,
+    staleTime: 120_000,
+  });
+}
+
+export function useRecommendations(analysisId: string) {
+  return useQuery<Recommendation[], ApiError>({
+    queryKey: queryKeys.recommendations(analysisId),
+    queryFn: () => api.getRecommendations(analysisId),
+    enabled: Boolean(analysisId),
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
 
