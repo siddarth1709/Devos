@@ -22,6 +22,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Attach appConfig to Fastify instance
   app.decorate('appConfig', appConfig);
 
+  // Gracefully handle empty or omitted JSON bodies without throwing FST_ERR_CTP_EMPTY_JSON_BODY
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body: string, done) => {
+    if (!body || body.trim() === '') {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(body));
+    } catch (err: any) {
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  });
+
   // Centralized Error Handler
   app.setErrorHandler(errorHandler);
 

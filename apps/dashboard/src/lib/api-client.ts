@@ -31,11 +31,13 @@ class DevosApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-    const headers = {
-      "Content-Type": "application/json",
+    const headers: Record<string, string> = {
       Accept: "application/json",
-      ...(options.headers || {}),
+      ...((options.headers as Record<string, string>) || {}),
     };
+    if (options.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12_000);
@@ -98,6 +100,7 @@ class DevosApiClient {
   async logout(): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>("/auth/logout", {
       method: "POST",
+      body: JSON.stringify({}),
     });
   }
 
@@ -105,7 +108,7 @@ class DevosApiClient {
   async createDemoSession(): Promise<{ sessionType: "demo"; user: UserProfile; expiresAt: string }> {
     return this.request<{ sessionType: "demo"; user: UserProfile; expiresAt: string }>(
       "/demo/session",
-      { method: "POST" }
+      { method: "POST", body: JSON.stringify({}) }
     );
   }
 
@@ -126,6 +129,7 @@ class DevosApiClient {
   async logoutDemo(): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>("/demo/logout", {
       method: "POST",
+      body: JSON.stringify({}),
     });
   }
 

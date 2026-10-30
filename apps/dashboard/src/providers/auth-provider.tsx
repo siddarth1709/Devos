@@ -124,8 +124,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await queryClient.invalidateQueries();
       router.push("/app");
     } catch (err) {
-      console.error("Failed to enter demo mode:", err);
+      console.warn("Backend demo session creation failed, using client demo session fallback:", err);
       // Fallback: enter demo in frontend with fixture
+      queryClient.setQueryData(["demo", "status"], {
+        isDemo: true,
+        sessionType: "demo",
+        user: {
+          id: "devos-demo-user",
+          login: "demo-investigator",
+          name: "DEVOS Demo Investigator",
+          email: "demo@devos.internal",
+          avatarUrl: "/brand/devos-mark.png",
+          role: "Demo Investigator" as const,
+          isDemo: true,
+        },
+      });
+      await queryClient.invalidateQueries();
       router.push("/app");
     }
   }, [queryClient, router]);
