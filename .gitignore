@@ -1,8 +1,48 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+build/
 dist/
+
+# Environment files
 .env
 .env.*
 !.env.example
+!.env.template
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/
+
+# Database
 *.db
 *.db-journal
+
+# Deployment
+.vercel/
+.netlify/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Temporary files
+*.tmp
+*.swp
