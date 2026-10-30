@@ -8,10 +8,195 @@ datasource db {
 }
 
 model Repository {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   name          String
-  path          String
-  defaultBranch String   @default("main")
-  createdAt     DateTime @default(now())
+  path          String     @unique
+  defaultBranch String     @default("main")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  analyses      Analysis[]
+  symbols       Symbol[]
 }
 
+model Analysis {
+  id               String            @id @default(cuid())
+  repositoryId     String
+  repository       Repository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  baseSha          String
+  headSha          String
+  status           String            @default("queued")
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  error            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  changedFiles     ChangedFile[]
+  evidences        Evidence[]
+  findings         Finding[]
+  hypotheses       Hypothesis[]
+  recommendations  Recommendation[]
+  investigations   Investigation[]
+  rejectedClaims   RejectedClaim[]
+  dependencyEdges  DependencyEdge[]
+  actionExecutions ActionExecution[]
+}
+
+model ChangedFile {
+  id         String   @id @default(cuid())
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  path       String
+  changeType String
+  oldPath    String?
+  baseSha    String
+  headSha    String
+  collector  String
+  createdAt  DateTime @default(now())
+}
+
+model Symbol {
+  id           String     @id @default(cuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  name         String
+  kind         String
+  file         String
+  lineStart    Int
+  lineEnd      Int
+  commitSha    String
+  collector    String
+  createdAt    DateTime   @default(now())
+}
+
+model DependencyEdge {
+  id         String    @id @default(cuid())
+  analysisId String?
+  analysis   Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  from       String
+  to         String
+  kind       String
+  sourceFile String
+  sourceLine Int
+  commitSha  String
+  collector  String
+  createdAt  DateTime  @default(now())
+}
+
+model Evidence {
+  id           String            @id @default(cuid())
+  analysisId   String?
+  analysis     Analysis?         @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  type         String
+  sourceCommit String
+  file         String
+  lineStart    Int?
+  lineEnd      Int?
+  symbol       String?
+  collector    String
+  collectedAt  DateTime          @default(now())
+  payload      String
+  findings     FindingEvidence[]
+}
+
+model Finding {
+  id             String            @id @default(cuid())
+  analysisId     String
+  analysis       Analysis          @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  title          String
+  severity       String
+  description    String
+  origin         String
+  status         String
+  confidence     String
+  baseSha        String
+  headSha        String
+  collector      String
+  createdAt      DateTime          @default(now())
+  evidences      FindingEvidence[]
+  rejectedClaims RejectedClaim[]
+}
+
+model FindingEvidence {
+  findingId  String
+  finding    Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  evidenceId String
+  evidence   Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([findingId, evidenceId])
+}
+
+model Hypothesis {
+  id          String   @id @default(cuid())
+  analysisId  String
+  analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  rationale   String
+  status      String
+  confidence  String
+  baseSha     String
+  headSha     String
+  collector   String
+  createdAt   DateTime @default(now())
+}
+
+model Recommendation {
+  id              String   @id @default(cuid())
+  analysisId      String
+  analysis        Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  title           String
+  description     String
+  priority        String
+  suggestedAction String?
+  rationale       String?
+  baseSha         String
+  headSha         String
+  collector       String
+  createdAt       DateTime @default(now())
+}
+
+model ActionExecution {
+  id          String    @id @default(cuid())
+  analysisId  String?
+  analysis    Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  actionName  String
+  params      String
+  status      String
+  approvedBy  String?
+  approvedAt  DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  output      String?
+  error       String?
+  commitSha   String
+  collector   String
+  createdAt   DateTime  @default(now())
+}
+
+model Investigation {
+  id         String    @id @default(cuid())
+  analysisId String
+  analysis   Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  status     String
+  stage      String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  error      String?
+  baseSha    String
+  headSha    String
+  collector  String
+}
+
+model RejectedClaim {
+  id         String   @id @default(cuid())
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  findingRef String?
+  finding    Finding? @relation(fields: [findingRef], references: [id], onDelete: SetNull)
+  reason     String
+  claimText  String
+  baseSha    String
+  headSha    String
+  collector  String
+  createdAt  DateTime @default(now())
+}
