@@ -15,3 +15,4 @@ export const healthRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
     };
   });
 };
+

@@ -152,3 +152,4 @@ describe('Fastify App Foundation', () => {
     });
   });
 });
+

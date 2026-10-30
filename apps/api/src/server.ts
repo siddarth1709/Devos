@@ -36,3 +36,4 @@ async function startServer(): Promise<void> {
 if (process.env.NODE_ENV !== 'test') {
   startServer();
 }
+
