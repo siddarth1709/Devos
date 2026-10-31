@@ -11,6 +11,7 @@ import {
   FileSearch,
   ShieldAlert,
   PlayCircle,
+  Terminal,
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
 import { useGitHubStatus } from "@/hooks/use-devos-api";
@@ -158,6 +159,28 @@ export function MobileNavDrawer({
                     </Link>
                   );
                 })}
+              </nav>
+            </div>
+
+            <div>
+              <span className="font-mono text-[9px] tracking-[0.14em] uppercase text-[#6E776F] font-semibold">
+                DEVELOPER TOOLS
+              </span>
+              <nav className="mt-2 space-y-1">
+                <a
+                  href="/devos-cli.zip"
+                  download="devos-cli.zip"
+                  onClick={onClose}
+                  className="flex items-center justify-between px-3 py-2 rounded-[4px] text-[13px] font-medium text-[#A0A79F] hover:text-[#F0F2ED] hover:bg-[#151816] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Terminal size={16} />
+                    <span>DevOS CLI</span>
+                  </div>
+                  <span className="font-mono text-[8px] text-[#C7F36B] bg-[#C7F36B]/10 border border-[#C7F36B]/30 px-1.5 py-0.5 rounded-[2px] font-semibold">
+                    .ZIP
+                  </span>
+                </a>
               </nav>
             </div>
           </div>

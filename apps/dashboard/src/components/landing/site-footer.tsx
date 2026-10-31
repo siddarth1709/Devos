@@ -60,6 +60,12 @@ export function SiteFooter() {
             >
               Principles
             </a>
+            <a
+              href="#cli"
+              className="hover:text-[#F0F2ED] transition-colors duration-[180ms] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7F36B]"
+            >
+              CLI
+            </a>
           </nav>
         </div>
 

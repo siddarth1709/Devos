@@ -5,6 +5,7 @@ import { ImpactSection } from "@/components/landing/impact-section";
 import { ProductSection } from "@/components/landing/product-section";
 import { MethodSection } from "@/components/landing/method-section";
 import { EvidenceSection } from "@/components/landing/evidence-section";
+import { CliSection } from "@/components/landing/cli-section";
 import { FinalCTA } from "@/components/landing/final-cta";
 import { SiteFooter } from "@/components/landing/site-footer";
 
@@ -19,6 +20,7 @@ export default function LandingPage() {
         <ProductSection />
         <MethodSection />
         <EvidenceSection />
+        <CliSection />
         <FinalCTA />
       </main>
       <SiteFooter />

@@ -18,6 +18,7 @@ export function SiteHeader() {
     { label: "Product", href: "#product" },
     { label: "Method", href: "#method" },
     { label: "Principles", href: "#principles" },
+    { label: "CLI", href: "#cli" },
   ];
 
   // Track active section and scroll offset
@@ -26,7 +27,7 @@ export function SiteHeader() {
       setIsScrolled(window.scrollY > 20);
 
       const scrollY = window.scrollY + 140;
-      const sections = ["principles", "method", "product", "impact-trace", "top"];
+      const sections = ["cli", "principles", "method", "product", "impact-trace", "top"];
 
       for (const sectionId of sections) {
         const el = document.getElementById(sectionId);

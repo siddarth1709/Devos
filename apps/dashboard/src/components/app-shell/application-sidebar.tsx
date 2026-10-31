@@ -10,6 +10,7 @@ import {
   ShieldAlert,
   PlayCircle,
   ExternalLink,
+  Terminal,
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
 import { useGitHubStatus } from "@/hooks/use-devos-api";
@@ -136,6 +137,31 @@ export function ApplicationSidebar({ onOpenConnectModal }: ApplicationSidebarPro
                 </Link>
               );
             })}
+          </nav>
+        </div>
+
+        <div>
+          <span className="px-3 font-mono text-[9px] tracking-[0.14em] uppercase text-[#6E776F] font-semibold">
+            DEVELOPER TOOLS
+          </span>
+          <nav className="mt-2 space-y-1" aria-label="Developer Tools">
+            <a
+              href="/devos-cli.zip"
+              download="devos-cli.zip"
+              className="group relative flex items-center justify-between px-3 py-2 rounded-[4px] text-[13px] font-medium text-[#A0A79F] hover:text-[#F0F2ED] hover:bg-[#151816] transition-all duration-[180ms]"
+              title="Download local DevOS CLI package"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Terminal
+                  size={16}
+                  className="shrink-0 text-[#6E776F] group-hover:text-[#C7F36B] transition-colors"
+                />
+                <span className="truncate">DevOS CLI</span>
+              </div>
+              <span className="font-mono text-[8px] tracking-[0.06em] text-[#C7F36B] bg-[#C7F36B]/10 border border-[#C7F36B]/30 px-1.5 py-0.5 rounded-[2px] shrink-0 font-semibold">
+                .ZIP
+              </span>
+            </a>
           </nav>
         </div>
       </div>
