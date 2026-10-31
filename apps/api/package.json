@@ -10,17 +10,17 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@devos/contracts": "file:../../packages/contracts",
     "@fastify/cors": "^9.0.1",
     "@prisma/client": "^5.21.1",
     "fastify": "^4.28.1",
+    "typescript": "^5.6.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
     "prisma": "^5.21.1",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.3",
     "vitest": "^2.1.2"
   }
 }
-

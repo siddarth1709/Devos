@@ -17,6 +17,7 @@ describe('Config Module', () => {
     expect(config.FRONTEND_URL).toBe('http://localhost:3000');
     expect(config.SESSION_SECRET).toBe('devos-default-session-secret-key-32-chars-long');
     expect(config.DEVOS_DEMO_MODE).toBe(false);
+    expect(config.ALLOWED_REPO_ROOT).toBe(process.cwd());
   });
 
   it('correctly parses and coerces valid custom environment variables', () => {
@@ -28,6 +29,7 @@ describe('Config Module', () => {
       CORS_ORIGIN: 'http://localhost:5173',
       OLLAMA_BASE_URL: 'http://localhost:11434',
       GEMMA_MODEL: 'gemma2:9b',
+      ALLOWED_REPO_ROOT: '/custom/root',
     });
 
     expect(custom.PORT).toBe(8080);
@@ -37,6 +39,7 @@ describe('Config Module', () => {
     expect(custom.CORS_ORIGIN).toBe('http://localhost:5173');
     expect(custom.OLLAMA_BASE_URL).toBe('http://localhost:11434');
     expect(custom.GEMMA_MODEL).toBe('gemma2:9b');
+    expect(custom.ALLOWED_REPO_ROOT).toBe('/custom/root');
   });
 
   it('fails fast with a clear error message on invalid PORT', () => {
@@ -61,4 +64,3 @@ describe('Config Module', () => {
     );
   });
 });
-

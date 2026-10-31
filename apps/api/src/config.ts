@@ -52,6 +52,7 @@ export const configSchema = z.object({
       z.boolean()
     )
     .default(false),
+  ALLOWED_REPO_ROOT: z.string().default(process.cwd()),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -70,4 +71,3 @@ export function loadConfig(rawEnv: Record<string, string | undefined> = process.
 }
 
 export const config = loadConfig();
-

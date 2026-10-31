@@ -50,7 +50,7 @@ Implementation Status:
 
 ### 2. `GET /api/repositories`
 
-- **Status**: `PLANNED`
+- **Status**: `IMPLEMENTED`
 - **Description**: Retrieves a list of tracked local Git repositories.
 - **Request**:
   - Headers: None required
@@ -87,8 +87,8 @@ Implementation Status:
 
 ### 3. `POST /api/repositories`
 
-- **Status**: `PLANNED`
-- **Description**: Registers a local Git repository for analysis.
+- **Status**: `IMPLEMENTED`
+- **Description**: Registers a local Git repository for analysis. Validates canonical path via `realpath`, enforces top-level repository root status, and ensures confinement within `ALLOWED_REPO_ROOT` (defaults to current working directory `process.cwd()`; set `ALLOWED_REPO_ROOT` in environment to permit an alternative workspace root for local development).
 - **Request Body** (`CreateRepositoryRequestSchema`):
   - `name` (`string`, required): Repository human-readable name.
   - `path` (`string`, required): Target repository filesystem path.
@@ -121,8 +121,8 @@ Implementation Status:
 
 ### 4. `POST /api/analyses`
 
-- **Status**: `PLANNED`
-- **Description**: Dispatches an asynchronous code and diff analysis job between two Git SHAs.
+- **Status**: `IMPLEMENTED`
+- **Description**: Dispatches code and diff analysis between two Git SHAs. Resolves user-supplied refs (e.g. `HEAD~1`, branch names) to immutable 40-character commit SHAs, validates against option injection, runs `git diff`, and persists changed files. The job is marked `status: "running"` with `finishedAt: null` until subsequent pipeline stages (AST extraction, AI review) produce a validated analysis report.
 - **Request Body** (`CreateAnalysisRequestSchema`):
   - `repositoryId` (`string`, required): Associated repository ID.
   - `baseSha` (`string`, required): Base Git commit SHA.
@@ -154,8 +154,8 @@ Implementation Status:
   "repositoryId": "repo_clx876abc0001",
   "baseSha": "3a4b5c6d7e8f901234567890abcdef1234567890",
   "headSha": "90abcdef12345678903a4b5c6d7e8f9012345678",
-  "status": "queued",
-  "startedAt": null,
+  "status": "running",
+  "startedAt": "2026-10-31T01:05:00.000Z",
   "finishedAt": null,
   "error": null
 }
@@ -165,8 +165,8 @@ Implementation Status:
 
 ### 5. `GET /api/analyses/:id`
 
-- **Status**: `PLANNED`
-- **Description**: Retrieves analysis job status and full report when available.
+- **Status**: `IMPLEMENTED`
+- **Description**: Retrieves analysis job status and full report when available. While the analysis pipeline is in progress (e.g. after Git diff ingestion prior to AST extraction and AI review), `job.status` is `"running"` and `report` is `null`. The job only transitions to `"done"` once a validated `AnalysisReport` is produced.
 - **Request**:
   - Route Params: `id` (`string`, required)
 - **Response Schema** (`GetAnalysisResponseSchema`):
@@ -424,11 +424,57 @@ Implementation Status:
 - Specified standard Error Response shape `{ error: { code, message } }`.
 - Documented 9 endpoints with schemas, field sources, error cases, and developmental fixtures:
   - `GET /api/health` (`IMPLEMENTED`)
-  - `GET /api/repositories` (`PLANNED`)
-  - `POST /api/repositories` (`PLANNED`)
-  - `POST /api/analyses` (`PLANNED`)
-  - `GET /api/analyses/:id` (`PLANNED`)
+  - `GET /api/repositories` (`IMPLEMENTED`)
+  - `POST /api/repositories` (`IMPLEMENTED`)
+  - `POST /api/analyses` (`IMPLEMENTED`)
+  - `GET /api/analyses/:id` (`IMPLEMENTED`)
   - `POST /api/analyses/:id/review` (`PLANNED`)
   - `GET /api/analyses/:id/export` (`PLANNED`)
   - `POST /api/actions` (`PLANNED`)
   - `POST /api/actions/:id/approve` (`PLANNED`)
+- Updated semantics: analysis lifecycle maintains `status: "running"` with `finishedAt: null` until full DEVOS report generation, and `ALLOWED_REPO_ROOT` defaults safely to `process.cwd()` to prevent unauthorized workspace access.
+- Task 2 AST Extraction Integrity Specifications:
+  - **Snapshot-Scoped Symbol Identity**: Every symbol is assigned a deterministic `symbolKey` formatted as `${file}#${containerName ? `${containerName}.` : ''}${name}:${kind}:${lineStart}:${colStart}` backed by a database index (`@@index([symbolKey])`). Symbol keys are strictly **snapshot-scoped**:
+    - The exact same source file snapshot always generates identical keys.
+    - Duplicate symbol names in different files (e.g. `src/a.ts#process:function:1:1` vs `src/b.ts#process:function:1:1`) or different container scopes (e.g. `src/models.ts#User.validate:method:2:3` vs `src/models.ts#Order.validate:method:6:3`) produce distinct keys.
+    - Moving or reformatting a declaration shifts line/column coordinates and changes its key.
+    - `symbolKey` is snapshot- and commit-scoped; it is **not** a cross-commit invariant identifier across historical code modifications.
+  - **Explicit Import & Export Semantics**: Preserves `importKind` (`default | named | namespace | side-effect`), `importedName`, `localName`, `moduleSpecifier`, `exportKind` (`named | default | all`), `exportAlias`, `isReExport`, `reExportModule` without overloading signature fields.
+  - **Repository-Wide Commit Extraction**: Enumerates all tracked files at the requested commit via `git ls-tree -r --name-only -z <headSha>`, extracting TypeScript and TSX sources while excluding declaration files (`.d.ts`), build artifacts, and dependency directories.
+  - **Honest Extraction Lifecycle**: Persists structured investigation metrics (`filesDiscovered`, `filesProcessed`, `filesSkipped`, `parseErrors`, `extractionErrors`). Assigns `ast_extraction_complete` only when all files parse cleanly, `ast_extraction_partial` when diagnostics or partial failures occur, and `ast_extraction_failed` when no files could be processed.
+  - **Decoupled Transactions & Failure Resiliency**: Git tree enumeration and TypeScript AST parsing execute outside database transactions to avoid holding SQLite table locks. AST persistence and previous-symbol cleanup run within short, isolated write transactions. Fatal extraction or persistence errors trigger an atomic failure transition (`status: "failed"`, `finishedAt: timestamp`, `Investigation.stage: "ast_extraction_failed"`).
+  - **Retry & Idempotency Semantics**: At the HTTP REST layer, `POST /api/analyses` creates a discrete `AnalysisJob` entity per request. Within the engine, re-running extraction for an existing `analysisId` via `executeAstExtractionForAnalysis` is strictly idempotent: all existing symbols for that `analysisId` are deleted within the write transaction before inserting the new symbols, preventing duplicate symbol accumulation.
+- Task 3 Dependency Graph Builder Specifications:
+  - **Deterministic Graph Model & Canonical Identifiers**:
+    - **Dependency Nodes (`DependencyNode`)**: Represents discrete code units. Scoped to analysis and repository.
+      - `nodeKey`: Canonical deterministic identifier formatted as `file:<path>` (for source files), `symbol:<symbolKey>` (for symbols), or `module:<specifier>` (for external or unresolved module boundaries). Backed by unique constraint `@@unique([analysisId, nodeKey])`.
+      - `nodeType`: Enum discriminator (`file | symbol | module`).
+      - Provenance attributes: `analysisId`, `repositoryId`, `filePath`, `symbolKey`, `name`, `moduleSpecifier`, `isExternal`.
+    - **Dependency Edges (`DependencyEdge`)**: Represents directional relationships between graph nodes.
+      - `edgeKey`: Deterministic identifier formatted as `${fromNodeKey}->${toNodeKey}:${kind}`.
+      - `kind`: Relationship discriminator (`imports_module | imports_symbol | re_exports | contains | references_symbol`).
+      - Provenance and source location attributes: `from`, `to`, `sourceFile`, `sourceLine`, `sourceCol`, `commitSha`, `repositoryId`.
+      - `resolutionStatus`: Resolution outcome (`resolved | unresolved | ambiguous`).
+      - `metadata`: JSON payload capturing resolution diagnostics, candidate symbols for ambiguous wildcards, or failure reasons.
+  - **Comprehensive Module Resolution Rules**:
+    - **Relative Specifiers**: Resolves `./` and `../` against the declaring source file's directory.
+    - **Extension Handling**: Resolves explicit `.ts` and `.tsx` file paths directly.
+    - **NodeNext Specifier Remapping**: Explicit `.js` and `.jsx` specifiers (used in TypeScript `NodeNext` configurations) map deterministically to local `.ts` and `.tsx` files if present.
+    - **Extensionless & Directory Index**: Extensionless specifiers resolve in priority order: `<path>.ts` -> `<path>.tsx` -> `<path>/index.ts` -> `<path>/index.tsx`.
+    - **External Dependencies**: Non-relative package specifiers (e.g. `fastify`, `@devos/contracts`, `node:child_process`) resolve to external module nodes (`isExternal: true`, `nodeKey: module:<specifier>`).
+    - **Unresolved Handling**: Any local specifier that cannot be located within the commit tree produces an unresolved node with `resolutionStatus: "unresolved"`.
+  - **Accurate Symbol & Re-Export Resolution**:
+    - **Export Kinds**: Resolves named, default (`export default`), aliased, and re-exported declarations.
+    - **Re-Export Chains**: Follows re-export chains across multiple intermediate files (e.g. `a.ts -> b.ts -> c.ts`) to locate canonical declaration symbols.
+    - **Wildcard Re-Exports**: Inspects `export * from ...` declarations. If multiple barrels export identical symbol names, records `resolutionStatus: "ambiguous"` with candidate symbol keys preserved in metadata.
+    - **Circular Reference Safety**: Traverses re-exports with cycle detection; detects circular loops (e.g. `a.ts -> b.ts -> a.ts`) and marks them as unresolved without infinite recursion.
+    - **Containment & Intra-File References**: Creates `contains` edges from file nodes to top-level and nested symbols, and `references_symbol` edges between symbols within the file or across resolved imports.
+  - **Truthful Lifecycle Stages & Investigation Metrics**:
+    - `dependency_graph_complete`: All discovered edges resolved cleanly (`unresolvedEdges === 0 && ambiguousEdges === 0`).
+    - `dependency_graph_partial`: Graph constructed with partial resolution (one or more unresolved or ambiguous edges recorded, or non-fatal resolution anomalies).
+    - `dependency_graph_failed`: Fatal graph construction or persistence failure.
+    - Persists structured metrics in `Investigation.metadata`: `nodesCount`, `edgesCount`, `resolvedEdges`, `unresolvedEdges`, `ambiguousEdges`, `externalModulesCount`, `executionTimeMs`.
+  - **Idempotency & Transactional Persistence**:
+    - In-memory graph resolution is computed pure and outside transaction boundaries.
+    - Persistence runs inside short, isolated write transactions (`deleteDependencyEdgesByAnalysis` and `deleteDependencyNodesByAnalysis` followed by batch inserts).
+    - Idempotent re-execution replaces previous graph state without orphan records or primary key collisions.

@@ -5,6 +5,12 @@ import { errorHandler } from './errorHandler.js';
 import { apiRoutes } from './routes/index.js';
 import { healthRoutes } from './routes/health.js';
 
+declare module 'fastify' {
+  interface FastifyInstance {
+    appConfig: AppConfig;
+  }
+}
+
 export interface BuildAppOptions extends FastifyServerOptions {
   appConfig?: AppConfig;
 }
@@ -35,7 +41,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       done(err, undefined);
     }
   });
-
   // Centralized Error Handler
   app.setErrorHandler(errorHandler);
 
