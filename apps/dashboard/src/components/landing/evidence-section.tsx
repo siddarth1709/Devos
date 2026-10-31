@@ -65,7 +65,7 @@ export function EvidenceSection() {
   return (
     <section
       id="principles"
-      className="w-full py-20 lg:py-[140px] bg-[#090A0A] relative"
+      className="w-full py-16 lg:pt-20 lg:pb-28 bg-[#090A0A] relative border-t border-[#1D221F]/60"
     >
       <div className="page-container grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-start">
         {/* Left Side (Cols 1-5) */}
