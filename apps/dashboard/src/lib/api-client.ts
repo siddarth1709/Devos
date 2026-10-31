@@ -15,6 +15,15 @@ import type {
   ApiError,
 } from "@/types/api";
 import type { ActionRequest, ActionResult } from "@/types/actions";
+import {
+  adaptRepository,
+  adaptRepositoriesResponse,
+  adaptImpactToGraph,
+  type BackendRepository,
+  type BackendImpactReport,
+  type BackendPreShipHealthReport,
+  type BackendReleaseGateEvaluation,
+} from "./api-adapters";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
@@ -24,6 +33,10 @@ class DevosApiClient {
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl;
   }
 
   private async request<T>(
@@ -60,21 +73,31 @@ class DevosApiClient {
           // Response body was not JSON
         }
 
+        const backendError = (errorData as { error?: { code?: string; message?: string } })?.error;
         const apiError: ApiError = {
           message:
+            backendError?.message ||
             (errorData as { message?: string })?.message ||
             `API Request failed with status ${response.status} (${response.statusText})`,
           status: response.status,
-          code: (errorData as { code?: string })?.code,
+          code:
+            backendError?.code ||
+            (errorData as { code?: string })?.code ||
+            (response.status === 404 ? "NOT_FOUND" : undefined),
           details: errorData,
         };
         throw apiError;
       }
 
+      // Empty 204 or bodyless responses
+      if (response.status === 204) {
+        return {} as T;
+      }
+
       return (await response.json()) as T;
     } catch (err: unknown) {
       clearTimeout(timeout);
-      if ((err as ApiError).status) {
+      if ((err as ApiError).status !== undefined) {
         throw err;
       }
 
@@ -82,7 +105,7 @@ class DevosApiClient {
       const networkError: ApiError = {
         message: isAbort
           ? "Request timed out after 12s. Please check backend response time."
-          : `Unable to connect to DEVOS API at ${this.baseUrl}. Ensure Builder 2's backend service is running.`,
+          : `Unable to connect to DEVOS API at ${this.baseUrl}. Ensure backend service is running.`,
         status: 0,
         code: isAbort ? "TIMEOUT" : "CONNECTION_REFUSED",
         details: err,
@@ -137,10 +160,9 @@ class DevosApiClient {
     return this.request<GitHubConnectionState>("/auth/github/status");
   }
 
-  async initiateGitHubConnect(): Promise<{ authUrl: string }> {
-    return this.request<{ authUrl: string }>("/auth/github/connect", {
-      method: "POST",
-    });
+  async initiateGitHubConnect(returnTo: string = "/app"): Promise<{ authUrl: string }> {
+    const authUrl = `${this.baseUrl}/auth/github?returnTo=${encodeURIComponent(returnTo)}`;
+    return { authUrl };
   }
 
   async disconnectGitHub(): Promise<{ success: boolean }> {
@@ -151,20 +173,64 @@ class DevosApiClient {
 
   // --- Repositories Domain ---
   async getRepositories(): Promise<Repository[]> {
-    return this.request<Repository[]>("/repositories");
+    const raw = await this.request<unknown>("/repositories");
+    return adaptRepositoriesResponse(raw);
   }
 
   async getRepository(repositoryId: string): Promise<Repository> {
-    return this.request<Repository>(`/repositories/${encodeURIComponent(repositoryId)}`);
+    const raw = await this.request<BackendRepository>(
+      `/repositories/${encodeURIComponent(repositoryId)}`
+    );
+    return adaptRepository(raw);
+  }
+
+  async createRepository(payload: {
+    name?: string;
+    path: string;
+    defaultBranch?: string;
+  }): Promise<Repository> {
+    const raw = await this.request<BackendRepository>("/repositories", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return adaptRepository(raw);
   }
 
   async getBranches(repositoryId: string): Promise<Branch[]> {
-    return this.request<Branch[]>(`/repositories/${encodeURIComponent(repositoryId)}/branches`);
+    // If backend doesn't implement branch list, get repository to extract default branch
+    try {
+      return await this.request<Branch[]>(
+        `/repositories/${encodeURIComponent(repositoryId)}/branches`
+      );
+    } catch (err) {
+      if ((err as ApiError).status === 404) {
+        const repo = await this.getRepository(repositoryId).catch(() => null);
+        if (repo) {
+          return [
+            {
+              name: repo.defaultBranch || "main",
+              isDefault: true,
+              commitSha: "HEAD",
+            },
+          ];
+        }
+      }
+      throw err;
+    }
   }
 
   // --- Pull Requests Domain ---
   async getPullRequests(repositoryId: string): Promise<PullRequest[]> {
-    return this.request<PullRequest[]>(`/repositories/${encodeURIComponent(repositoryId)}/pulls`);
+    try {
+      return await this.request<PullRequest[]>(
+        `/repositories/${encodeURIComponent(repositoryId)}/pulls`
+      );
+    } catch (err) {
+      if ((err as ApiError).status === 404) {
+        return [];
+      }
+      throw err;
+    }
   }
 
   async getPullRequest(
@@ -180,9 +246,16 @@ class DevosApiClient {
     repositoryId: string,
     pullRequestId: string
   ): Promise<ChangedFile[]> {
-    return this.request<ChangedFile[]>(
-      `/repositories/${encodeURIComponent(repositoryId)}/pulls/${encodeURIComponent(pullRequestId)}/files`
-    );
+    try {
+      return await this.request<ChangedFile[]>(
+        `/repositories/${encodeURIComponent(repositoryId)}/pulls/${encodeURIComponent(pullRequestId)}/files`
+      );
+    } catch (err) {
+      if ((err as ApiError).status === 404) {
+        return [];
+      }
+      throw err;
+    }
   }
 
   async getFileDiff(
@@ -212,19 +285,83 @@ class DevosApiClient {
     };
   }
 
-  // --- Analysis Domain ---
+  // --- Analysis Domain (Real Backend Lifecycle) ---
+  async createAnalysis(payload: {
+    repositoryId: string;
+    baseSha: string;
+    headSha: string;
+  }): Promise<AnalysisJob> {
+    return this.request<AnalysisJob>("/analyses", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   async triggerAnalysis(
     repositoryId: string,
-    pullRequestId: string
+    _pullRequestId: string
   ): Promise<AnalysisJob> {
-    return this.request<AnalysisJob>(
-      `/repositories/${encodeURIComponent(repositoryId)}/pulls/${encodeURIComponent(pullRequestId)}/analysis`,
-      { method: "POST" }
+    return this.createAnalysis({
+      repositoryId,
+      baseSha: "HEAD~1",
+      headSha: "HEAD",
+    });
+  }
+
+  async getAnalysisStatus(jobId: string): Promise<{
+    job: AnalysisJob;
+    report: AnalysisReport | null;
+  }> {
+    return this.request<{
+      job: AnalysisJob;
+      report: AnalysisReport | null;
+    }>(`/analyses/${encodeURIComponent(jobId)}`);
+  }
+
+  async completeAnalysis(analysisId: string): Promise<{
+    analysis: AnalysisJob;
+    status: string;
+    completedAt: string;
+  }> {
+    return this.request<{
+      analysis: AnalysisJob;
+      status: string;
+      completedAt: string;
+    }>(`/analyses/${encodeURIComponent(analysisId)}/complete`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  async getImpactReport(analysisId: string): Promise<BackendImpactReport> {
+    return this.request<BackendImpactReport>(
+      `/analyses/${encodeURIComponent(analysisId)}/impact`
     );
   }
 
-  async getAnalysisStatus(jobId: string): Promise<AnalysisJob> {
-    return this.request<AnalysisJob>(`/analyses/${encodeURIComponent(jobId)}`);
+  async getChangeReview(analysisId: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(
+      `/analyses/${encodeURIComponent(analysisId)}/review`
+    );
+  }
+
+  async getPreShipHealth(analysisId: string): Promise<BackendPreShipHealthReport> {
+    return this.request<BackendPreShipHealthReport>(
+      `/analyses/${encodeURIComponent(analysisId)}/health`
+    );
+  }
+
+  async evaluateReleaseGate(
+    analysisId: string,
+    policy?: Record<string, unknown>
+  ): Promise<BackendReleaseGateEvaluation> {
+    return this.request<BackendReleaseGateEvaluation>(
+      `/analyses/${encodeURIComponent(analysisId)}/health/gate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ policy: policy || {} }),
+      }
+    );
   }
 
   // --- Engineering Graph Domain ---
@@ -232,18 +369,37 @@ class DevosApiClient {
     repositoryId: string,
     analysisId?: string
   ): Promise<DependencyGraphData> {
-    const query = analysisId ? `?analysisId=${encodeURIComponent(analysisId)}` : "";
-    return this.request<DependencyGraphData>(
-      `/repositories/${encodeURIComponent(repositoryId)}/graph${query}`
-    );
+    if (!analysisId) {
+      return {
+        repositoryId,
+        analysisId: undefined,
+        symbols: [],
+        edges: [],
+        changedSymbols: [],
+        impactedSymbols: [],
+      };
+    }
+
+    try {
+      const impactReport = await this.getImpactReport(analysisId);
+      const analysisData = await this.getAnalysisStatus(analysisId).catch(() => null);
+      const changedSymbols = analysisData?.report?.changedSymbols || [];
+      return adaptImpactToGraph(repositoryId, analysisId, impactReport, changedSymbols);
+    } catch {
+      return {
+        repositoryId,
+        analysisId,
+        symbols: [],
+        edges: [],
+        changedSymbols: [],
+        impactedSymbols: [],
+      };
+    }
   }
 
   // --- AI Code Review Domain ---
   async getAnalysisReport(analysisId: string): Promise<AnalysisReport> {
-    const response = await this.request<{
-      job: AnalysisJob;
-      report: AnalysisReport | null;
-    }>(`/analyses/${encodeURIComponent(analysisId)}`);
+    const response = await this.getAnalysisStatus(analysisId);
 
     if (!response.report) {
       throw {
@@ -293,8 +449,15 @@ class DevosApiClient {
   }
 
   async getActions(repositoryId?: string): Promise<ActionRequest[]> {
-    const query = repositoryId ? `?repositoryId=${encodeURIComponent(repositoryId)}` : "";
-    return this.request<ActionRequest[]>(`/actions${query}`);
+    try {
+      const query = repositoryId ? `?repositoryId=${encodeURIComponent(repositoryId)}` : "";
+      return await this.request<ActionRequest[]>(`/actions${query}`);
+    } catch (err) {
+      if ((err as ApiError).status === 404) {
+        return [];
+      }
+      throw err;
+    }
   }
 }
 
@@ -345,7 +508,6 @@ export function parseUnifiedDiffPatch(patch: string): DiffHunk[] {
         content: line.slice(1),
       });
     } else {
-      // Context line (or leading space)
       currentHunk.lines.push({
         type: "context",
         oldLineNumber: oldLine++,

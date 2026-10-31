@@ -81,25 +81,25 @@ export const ContextSelectorHeader = memo(function ContextSelectorHeader({
             ) : repositories.length > 0 ? (
               repositories.map((repo) => (
                 <option key={repo.id} value={repo.id} className="bg-[#101211] text-[#F0F2ED]">
-                  {repo.name} ({repo.owner})
+                  {repo.name} {repo.owner ? `(${repo.owner})` : `[${repo.defaultBranch || "main"}]`}
                 </option>
               ))
             ) : (
-              <option value="siddarth1709-Devos" className="bg-[#101211] text-[#F0F2ED]">
-                Devos (siddarth1709)
+              <option value="" className="bg-[#101211] text-[#F0F2ED]">
+                No connected repositories
               </option>
             )}
           </select>
         </div>
 
-        {/* Pull Request Picker */}
+        {/* Pull Request / Analysis Context Picker */}
         <div className="flex items-center gap-2 bg-[#151816] border border-[#292E2A] rounded-[4px] px-2.5 h-[36px]">
           <GitPullRequest size={14} className="text-[#C7F36B]" />
           <select
             value={currentPrId}
             onChange={(e) => handleSelectPr(e.target.value)}
-            disabled={prsLoading}
-            className="bg-transparent text-[#F0F2ED] font-mono text-[11px] focus:outline-none cursor-pointer"
+            disabled={prsLoading || pullRequests.length === 0}
+            className="bg-transparent text-[#F0F2ED] font-mono text-[11px] focus:outline-none cursor-pointer disabled:opacity-60"
           >
             {prsLoading ? (
               <option value="">Loading PRs...</option>
@@ -110,8 +110,8 @@ export const ContextSelectorHeader = memo(function ContextSelectorHeader({
                 </option>
               ))
             ) : (
-              <option value="2" className="bg-[#101211] text-[#F0F2ED]">
-                PR #2: feat(frontend)
+              <option value="" className="bg-[#101211] text-[#A0A79F]">
+                Commit Range Mode
               </option>
             )}
           </select>

@@ -7,7 +7,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/lib/integration.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.67.1",
