@@ -14,7 +14,7 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      DATABASE_URL: file:./dev.db
+      DATABASE_URL: file:./ci.db
 
     steps:
       - name: Checkout repository
@@ -35,9 +35,8 @@ jobs:
 
       - name: Generate database client & build API
         env:
-          DATABASE_URL: file:./dev.db
+          DATABASE_URL: file:./ci.db
         run: |
-          cp apps/api/.env.example apps/api/.env || true
           pnpm --filter api exec prisma generate --schema prisma/schema.prisma
           pnpm --filter api exec prisma migrate deploy --schema prisma/schema.prisma
           pnpm --filter api build
@@ -48,19 +47,13 @@ jobs:
           PORT: 3000
           HOST: 127.0.0.1
           NODE_ENV: test
-          DATABASE_URL: file:./dev.db
+          DATABASE_URL: file:./ci.db
           ALLOWED_REPO_ROOT: ${{ github.workspace }}
         run: |
           node apps/api/dist/server.js &
           API_PID=$!
           echo "API_PID=$API_PID" >> $GITHUB_ENV
-          for i in {1..30}; do
-            if curl -s http://127.0.0.1:3000/api/health >/dev/null; then
-              echo "DEVOS API is healthy"
-              break
-            fi
-            sleep 1
-          done
+          npx wait-on http://127.0.0.1:3000/api/health --timeout 30000
 
       - name: Run DEVOS CLI Analysis & Release Gate
         id: devos
