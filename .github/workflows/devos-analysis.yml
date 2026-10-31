@@ -13,6 +13,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    env:
+      DATABASE_URL: file:./ci.db
 
     steps:
       - name: Checkout repository
@@ -32,6 +34,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate database client & build API
+        env:
+          DATABASE_URL: file:./ci.db
         run: |
           pnpm --filter api exec prisma generate --schema prisma/schema.prisma
           pnpm --filter api exec prisma migrate deploy --schema prisma/schema.prisma

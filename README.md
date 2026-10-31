@@ -91,8 +91,9 @@ pnpm install
 ### 2. Setup Database
 
 ```bash
+cp apps/api/.env.example apps/api/.env
 pnpm --filter api exec prisma generate --schema prisma/schema.prisma
-pnpm --filter api exec prisma migrate deploy --schema prisma/schema.prisma
+DATABASE_URL="file:./dev.db" pnpm --filter api exec prisma migrate deploy --schema prisma/schema.prisma
 ```
 
 ### 3. Build Monorepo
