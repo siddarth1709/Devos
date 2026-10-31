@@ -219,9 +219,9 @@ describe('Repository Registration and Git Ingestion Endpoints', () => {
       expect(body.repositoryId).toBe(registeredRepoId);
       expect(body.baseSha).toBe(baseSha);
       expect(body.headSha).toBe(headSha);
-      expect(body.status).toBe('running');
+      expect(body.status).toBe('completed');
       expect(body.startedAt).toBeDefined();
-      expect(body.finishedAt).toBeNull();
+      expect(body.finishedAt).not.toBeNull();
       expect(body.error).toBeNull();
 
       createdAnalysisId = body.id;
@@ -271,9 +271,9 @@ describe('Repository Registration and Git Ingestion Endpoints', () => {
       expect(body.job.repositoryId).toBe(registeredRepoId);
       expect(body.job.baseSha).toBe(baseSha);
       expect(body.job.headSha).toBe(headSha);
-      expect(body.job.status).toBe('running');
-      expect(body.job.finishedAt).toBeNull();
-      expect(body.report).toBeNull();
+      expect(body.job.status).toBe('completed');
+      expect(body.job.finishedAt).not.toBeNull();
+      expect(body.report).not.toBeNull();
     });
 
     it('enforces safe default ALLOWED_REPO_ROOT rejecting external paths', async () => {

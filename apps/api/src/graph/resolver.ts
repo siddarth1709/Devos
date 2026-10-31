@@ -124,9 +124,24 @@ export function resolveExportedSymbol(
 
   if (exportName === 'default') {
     const directDefault = fileSymbols.find(
-      (s) => s.isExported && (s.exportKind === 'default' || s.name === 'default')
+      (s) =>
+        s.isExported &&
+        !s.reExportModule &&
+        (s.exportKind === 'default' || s.name === 'default' || s.exportAlias === 'default')
     );
     if (directDefault) {
+      if (directDefault.kind === 'export' && directDefault.name !== 'default') {
+        const localDecl = fileSymbols.find(
+          (s) => s.name === directDefault.name && s.kind !== 'export' && s.kind !== 'import'
+        );
+        if (localDecl) {
+          return {
+            status: 'resolved',
+            targetSymbolKey: localDecl.symbolKey,
+            targetFile,
+          };
+        }
+      }
       return {
         status: 'resolved',
         targetSymbolKey: directDefault.symbolKey,
@@ -135,7 +150,10 @@ export function resolveExportedSymbol(
     }
 
     const reExportDefault = fileSymbols.find(
-      (s) => s.kind === 'export' && s.exportAlias === 'default' && s.reExportModule
+      (s) =>
+        s.kind === 'export' &&
+        s.reExportModule &&
+        (s.exportAlias === 'default' || (!s.exportAlias && s.name === 'default'))
     );
     if (reExportDefault && reExportDefault.reExportModule) {
       const nextMod = resolveModuleSpecifier(targetFile, reExportDefault.reExportModule, allTrackedFiles);
@@ -168,6 +186,30 @@ export function resolveExportedSymbol(
     };
   }
 
+  const localExportClause = fileSymbols.find(
+    (s) =>
+      s.kind === 'export' &&
+      !s.reExportModule &&
+      ((s.exportAlias && s.exportAlias === exportName) || (!s.exportAlias && s.name === exportName))
+  );
+  if (localExportClause) {
+    const localDecl = fileSymbols.find(
+      (s) => s.name === localExportClause.name && s.kind !== 'export' && s.kind !== 'import'
+    );
+    if (localDecl) {
+      return {
+        status: 'resolved',
+        targetSymbolKey: localDecl.symbolKey,
+        targetFile,
+      };
+    }
+    return {
+      status: 'resolved',
+      targetSymbolKey: localExportClause.symbolKey,
+      targetFile,
+    };
+  }
+
   const namedReExports = fileSymbols.filter(
     (s) =>
       s.kind === 'export' &&
@@ -192,11 +234,30 @@ export function resolveExportedSymbol(
     }
   }
 
+  const nsReExport = fileSymbols.find(
+    (s) =>
+      s.kind === 'export' &&
+      s.reExportModule &&
+      s.exportKind === 'all' &&
+      s.exportAlias &&
+      s.exportAlias === exportName
+  );
+  if (nsReExport && nsReExport.reExportModule) {
+    const nextMod = resolveModuleSpecifier(targetFile, nsReExport.reExportModule, allTrackedFiles);
+    if (nextMod.status === 'resolved' && nextMod.targetFile) {
+      return {
+        status: 'resolved',
+        targetFile: nextMod.targetFile,
+      };
+    }
+  }
+
   const wildcardReExports = fileSymbols.filter(
-    (s) => s.kind === 'export' && s.exportKind === 'all' && s.name === '*' && s.reExportModule
+    (s) => s.kind === 'export' && s.exportKind === 'all' && s.name === '*' && s.reExportModule && !s.exportAlias
   );
 
   const wildcardCandidates: SymbolResolution[] = [];
+  let foundCircularInWildcard = false;
   for (const wild of wildcardReExports) {
     if (!wild.reExportModule) continue;
     const nextMod = resolveModuleSpecifier(targetFile, wild.reExportModule, allTrackedFiles);
@@ -208,23 +269,41 @@ export function resolveExportedSymbol(
         allTrackedFiles,
         new Set(visitedFiles)
       );
-      if (res.status === 'resolved') {
+      if (res.status === 'resolved' && res.targetSymbolKey) {
         wildcardCandidates.push(res);
+      } else if (res.reason === 'CIRCULAR_IMPORT_DETECTED') {
+        foundCircularInWildcard = true;
       }
     }
   }
 
-  if (wildcardCandidates.length === 1) {
-    return wildcardCandidates[0]!;
+  const uniqueCandidatesMap = new Map<string, SymbolResolution>();
+  for (const cand of wildcardCandidates) {
+    if (cand.targetSymbolKey && !uniqueCandidatesMap.has(cand.targetSymbolKey)) {
+      uniqueCandidatesMap.set(cand.targetSymbolKey, cand);
+    }
   }
-  if (wildcardCandidates.length > 1) {
-    const candidateKeys = wildcardCandidates
+
+  const uniqueCandidates = Array.from(uniqueCandidatesMap.values());
+  if (uniqueCandidates.length === 1) {
+    return uniqueCandidates[0]!;
+  }
+  if (uniqueCandidates.length > 1) {
+    const candidateKeys = uniqueCandidates
       .map((c) => c.targetSymbolKey)
       .filter((k): k is string => Boolean(k));
     return {
       status: 'ambiguous',
       reason: 'AMBIGUOUS_WILDCARD_EXPORT',
       candidates: candidateKeys,
+      targetFile,
+    };
+  }
+
+  if (foundCircularInWildcard && wildcardReExports.length > 0) {
+    return {
+      status: 'unresolved',
+      reason: 'CIRCULAR_IMPORT_DETECTED',
       targetFile,
     };
   }

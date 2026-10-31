@@ -10,7 +10,7 @@ export type ReadinessState = z.infer<typeof ReadinessStateEnum>;
 export const ConfidenceEnum = z.enum(['Low', 'Medium', 'High', 'Very High']);
 export type Confidence = z.infer<typeof ConfidenceEnum>;
 
-export const AnalysisStatusEnum = z.enum(['queued', 'running', 'done', 'failed']);
+export const AnalysisStatusEnum = z.enum(['queued', 'running', 'done', 'failed', 'completed', 'partial']);
 export type AnalysisStatus = z.infer<typeof AnalysisStatusEnum>;
 
 export const EvidenceTypeEnum = z.enum([

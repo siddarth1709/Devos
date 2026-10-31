@@ -122,7 +122,7 @@ Implementation Status:
 ### 4. `POST /api/analyses`
 
 - **Status**: `IMPLEMENTED`
-- **Description**: Dispatches code and diff analysis between two Git SHAs. Resolves user-supplied refs (e.g. `HEAD~1`, branch names) to immutable 40-character commit SHAs, validates against option injection, runs `git diff`, and persists changed files. The job is marked `status: "running"` with `finishedAt: null` until subsequent pipeline stages (AST extraction, AI review) produce a validated analysis report.
+- **Description**: Dispatches code and diff analysis between two Git SHAs. Resolves user-supplied refs (e.g. `HEAD~1`, branch names) to immutable 40-character commit SHAs, validates against option injection, runs `git diff`, and runs repository-wide AST extraction, dependency graph generation, change impact analysis, and deterministic risk evaluation synchronously. Upon completion of the pipeline, the backend validates required stages and returns terminal status (`completed`, `partial`, or `failed`) with `finishedAt` populated.
 - **Request Body** (`CreateAnalysisRequestSchema`):
   - `repositoryId` (`string`, required): Associated repository ID.
   - `baseSha` (`string`, required): Base Git commit SHA.
@@ -133,14 +133,14 @@ Implementation Status:
     - `repositoryId` (`string`): Target repository identifier.
     - `baseSha` (`string`): Base Git commit SHA.
     - `headSha` (`string`): Head Git commit SHA.
-    - `status` (`"queued" | "running" | "done" | "failed"`): Current job execution state.
+    - `status` (`"queued" | "running" | "completed" | "partial" | "failed" | "done"`): Final job execution state.
     - `startedAt` (`string | null`): Execution start timestamp.
     - `finishedAt` (`string | null`): Execution finish timestamp.
     - `error` (`string | null`): Failure error message if status is failed.
 - **Field Sources**:
   - `id`: Job scheduler identifier.
   - `repositoryId`, `baseSha`, `headSha`: Client request payload.
-  - `status`: Initial queue state (`"queued"`).
+  - `status`: Synchronous pipeline outcome (`"completed"`, `"partial"`, or `"failed"`).
   - `startedAt`, `finishedAt`, `error`: Analysis worker lifecycle events.
 - **Error Cases**:
   - `400 VALIDATION_ERROR`: Missing or malformed parameters.
@@ -154,9 +154,9 @@ Implementation Status:
   "repositoryId": "repo_clx876abc0001",
   "baseSha": "3a4b5c6d7e8f901234567890abcdef1234567890",
   "headSha": "90abcdef12345678903a4b5c6d7e8f9012345678",
-  "status": "running",
+  "status": "completed",
   "startedAt": "2026-10-31T01:05:00.000Z",
-  "finishedAt": null,
+  "finishedAt": "2026-10-31T01:05:02.000Z",
   "error": null
 }
 ```
@@ -245,6 +245,86 @@ Implementation Status:
   }
 }
 ```
+
+---
+
+### 5a. `POST /api/analyses/:id/impact`
+
+- **Status**: `IMPLEMENTED`
+- **Description**: Triggers deterministic change impact analysis for an existing analysis ID. Reads changed files, symbols, and dependency graph relationships, performs reverse dependency traversal, and persists results with full provenance.
+- **Request**:
+  - Route Params: `id` (`string`, required)
+- **Response**: `ImpactReport` object containing `summary`, `results`, and `stage` (`impact_analysis_complete` or `impact_analysis_partial`).
+- **Error Cases**:
+  - `404 NOT_FOUND`: Analysis ID not found.
+  - `500 IMPACT_ANALYSIS_FAILED`: Dependency graph missing or failed, or execution error.
+
+---
+
+### 5b. `GET /api/analyses/:id/impact`
+
+- **Status**: `IMPLEMENTED`
+- **Description**: Retrieves the persisted change impact report and summary metrics for an analysis.
+- **Request**:
+  - Route Params: `id` (`string`, required)
+- **Response**: `ImpactReport` object.
+- **Error Cases**:
+  - `404 NOT_FOUND`: Analysis or impact report not found.
+
+---
+
+### 5c. `GET /api/analyses/:id/impact/targets/:targetKey`
+
+- **Status**: `IMPLEMENTED`
+- **Description**: Retrieves detailed impact paths and supporting evidence for a specific affected file or symbol targetKey (URL-encoded).
+- **Request**:
+  - Route Params:
+    - `id` (`string`, required): Analysis ID.
+    - `targetKey` (`string`, required): Target node key (e.g. `file:src/app.ts` or `symbol:...`).
+- **Response**:
+  - `targetKey` (`string`): The requested target key.
+  - `impacts` (`ImpactResultItem[]`): Array of impact results connecting changes to this target.
+- **Error Cases**:
+  - `404 NOT_FOUND`: Analysis not found or targetKey not impacted in this analysis.
+
+---
+
+### 5d. `POST /api/analyses/:id/risk`
+
+- **Status**: `IMPLEMENTED`
+- **Description**: Triggers or re-executes deterministic, evidence-grounded risk assessment for an existing analysis ID. Evaluates change magnitude, dependency exposure, structural importance, and evidence uncertainty using outputs from Git ingestion, AST extraction, dependency graph, and change impact analysis.
+- **Request**:
+  - Route Params: `id` (`string`, required)
+- **Response**: `RiskAssessmentReport` object containing overall score (0–100), level (`low` | `medium` | `high` | `critical`), severity (0–100), likelihood (0–100), confidence (0–100), uncertaintyScore (0–100), uncertaintyAdjustment, confirmedExposure metrics, potentialExposure metrics, factors, highest-risk targets, limitations, missing evidence warnings, and scoring model version (`v1.1.0-deterministic`).
+- **Error Cases**:
+  - `404 NOT_FOUND`: Analysis ID not found.
+  - `500 RISK_ANALYSIS_FAILED`: Impact analysis missing or failed, or execution error.
+
+---
+
+### 5e. `GET /api/analyses/:id/risk`
+
+- **Status**: `IMPLEMENTED`
+- **Description**: Retrieves the persisted risk assessment report and overall risk metrics for an analysis.
+- **Request**:
+  - Route Params: `id` (`string`, required)
+- **Response**: `RiskAssessmentReport` object.
+- **Error Cases**:
+  - `404 NOT_FOUND`: Analysis or risk assessment report not found.
+
+---
+
+### 5f. `GET /api/analyses/:id/risk/targets/:targetKey`
+
+- **Status**: `IMPLEMENTED`
+- **Description**: Retrieves component-level risk assessment, reasons, and supporting evidence for a specific file or symbol targetKey (URL-encoded).
+- **Request**:
+  - Route Params:
+    - `id` (`string`, required): Analysis ID.
+    - `targetKey` (`string`, required): Target component key (e.g. `file:src/app.ts` or `symbol:...`).
+- **Response**: `RiskTargetComponent` object containing component `score`, `level`, `severity`, `likelihood`, `confidence`, `reasons`, `evidence`, and `unresolvedLimitations`.
+- **Error Cases**:
+  - `404 NOT_FOUND`: Analysis not found or targetKey not evaluated in this analysis.
 
 ---
 
@@ -451,9 +531,9 @@ Implementation Status:
       - `nodeType`: Enum discriminator (`file | symbol | module`).
       - Provenance attributes: `analysisId`, `repositoryId`, `filePath`, `symbolKey`, `name`, `moduleSpecifier`, `isExternal`.
     - **Dependency Edges (`DependencyEdge`)**: Represents directional relationships between graph nodes.
-      - `edgeKey`: Deterministic identifier formatted as `${fromNodeKey}->${toNodeKey}:${kind}`.
+      - `edgeKey`: Deterministic identifier formatted as `${fromNodeKey}->${toNodeKey}:${kind}`. Backed by composite unique constraint `@@unique([analysisId, edgeKey])` to prevent duplicate edge accumulation within an analysis.
       - `kind`: Relationship discriminator (`imports_module | imports_symbol | re_exports | contains | references_symbol`).
-      - Provenance and source location attributes: `from`, `to`, `sourceFile`, `sourceLine`, `sourceCol`, `commitSha`, `repositoryId`.
+      - Provenance and source location attributes: Mandatory non-null `analysisId`, `repositoryId`, `commitSha`, `sourceFile`, `sourceLine`, `sourceCol`, `collector`. Validated prior to persistence.
       - `resolutionStatus`: Resolution outcome (`resolved | unresolved | ambiguous`).
       - `metadata`: JSON payload capturing resolution diagnostics, candidate symbols for ambiguous wildcards, or failure reasons.
   - **Comprehensive Module Resolution Rules**:
@@ -469,6 +549,17 @@ Implementation Status:
     - **Wildcard Re-Exports**: Inspects `export * from ...` declarations. If multiple barrels export identical symbol names, records `resolutionStatus: "ambiguous"` with candidate symbol keys preserved in metadata.
     - **Circular Reference Safety**: Traverses re-exports with cycle detection; detects circular loops (e.g. `a.ts -> b.ts -> a.ts`) and marks them as unresolved without infinite recursion.
     - **Containment & Intra-File References**: Creates `contains` edges from file nodes to top-level and nested symbols, and `references_symbol` edges between symbols within the file or across resolved imports.
+  - **Graph Edge Semantics & Supported Types**:
+    - **`imports_module`**: Declared module-level import relationship linking an importing source file (`file:<sourcePath>`) to a resolved target source file (`file:<targetPath>`) or an external/unresolved module specifier (`module:<specifier>`). Covers relative paths, extensionless specifiers, NodeNext `.js` specifiers, and external packages.
+    - **`imports_symbol`**: Resolved import relationship linking an importing file to the canonical exported declaration symbol (`symbol:<symbolKey>`), or to an external module node (`module:<specifier>`) when importing external packages, or to target file when namespace importing (`import * as ns`).
+    - **`re_exports`**: Re-export relationship linking an exporting source file to a re-exported symbol (`symbol:<symbolKey>`) or re-exported module (`file:<targetPath>` or `module:<specifier>`). Covers named re-exports (`export { a as b }`), default re-exports (`export { default }`, `export { a as default }`), namespace re-exports (`export * as ns from './mod'`), and wildcard re-exports (`export * from './mod'`).
+    - **`contains`**: Structural containment hierarchy linking source files (`file:<path>`) to top-level declared symbols (`symbol:<symbolKey>`), and container symbols (classes, interfaces) to member symbols (methods, constructors).
+    - **`references_symbol`**: Intra-file signature reference between declared symbols based on explicit signature symbol mentions (e.g., parameter or return types referencing a declared class or type).
+    - **Explicitly Unsupported Relationships**:
+      - Inter-file call-graph expression traversal across function/method bodies.
+      - Dynamic runtime imports (`import(...)` expressions).
+      - CommonJS `require()` and `module.exports` resolution.
+      - Global ambient declarations (`declare global`, ambient `.d.ts` module augmentations).
   - **Truthful Lifecycle Stages & Investigation Metrics**:
     - `dependency_graph_complete`: All discovered edges resolved cleanly (`unresolvedEdges === 0 && ambiguousEdges === 0`).
     - `dependency_graph_partial`: Graph constructed with partial resolution (one or more unresolved or ambiguous edges recorded, or non-fatal resolution anomalies).
@@ -478,3 +569,63 @@ Implementation Status:
     - In-memory graph resolution is computed pure and outside transaction boundaries.
     - Persistence runs inside short, isolated write transactions (`deleteDependencyEdgesByAnalysis` and `deleteDependencyNodesByAnalysis` followed by batch inserts).
     - Idempotent re-execution replaces previous graph state without orphan records or primary key collisions.
+- Task 5 Deterministic Risk Analysis Engine Specifications:
+  - **Deterministic Multi-Dimensional Risk Model**:
+    - **Scoring Dimensions**:
+      - *Change Magnitude*: Evaluates total files, symbols, additions, modifications, renames, and deletions.
+      - *Confirmed Dependency Exposure*: Evaluates strictly resolved, evidence-supported direct and transitive dependents, traversal depth, and impacted files/symbols (`confirmedExposure`).
+      - *Potential Exposure & Uncertainty*: Evaluates unresolved dependencies and ambiguous candidate references (`potentialExposure`). Reduces confidence, increases uncertainty, and applies an explicitly named conservative `uncertaintyAdjustment` to severity without being counted as confirmed affected components or increasing measured likelihood.
+      - *Structural Importance*: Evaluates changes to exported public APIs, re-export/barrel files (`index.ts`, `public.ts`), and central shared dependencies.
+      - *Evidence Quality & Uncertainty*: Measures completeness of AST extraction, dependency graph, and change impact results. Penalizes confidence for unresolved or ambiguous dependencies and partial upstream analysis stages.
+    - **Transparent Scoring Formula**:
+      - `severity` (0–100): Calculated as $\min(100, \text{round}(0.30 \times M + 0.40 \times E_{\text{confirmed}} + 0.30 \times S) + \text{uncertaintyAdjustment})$.
+      - `likelihood` (0–100): Calculated strictly from confirmed defect probability: $\min(100, \text{round}(0.40 \times S + 0.35 \times \min(100, 25 \times D_{\text{direct}}) + 0.25 \times \min(100, 25 \times N_{\text{del}} + 10 \times N_{\text{mod}})))$. Unresolved and ambiguous edges do NOT increase measured likelihood.
+      - `confidence` (0–100): Starts at 100, penalized by unresolved dependencies (-10 each), ambiguous dependencies (-15 each), partial upstream stages (-20 to -25 each), missing git diff statistics (-15), or unverified empty diffs (-60). Floor at 10.
+      - `overallScore` (0–100): Calculated as $\text{round}(0.55 \times \text{severity} + 0.45 \times \text{likelihood})$ (0 when verified 0 files changed).
+      - `level`: Discrete classification: `low` (0–25), `medium` (26–50), `high` (51–75), `critical` (76–100).
+      - `modelVersion`: Deterministic model identifier: `v1.1.0-deterministic`.
+  - **Uncertainty & Safety Invariants**:
+    - Uncertainty is tracked strictly separately from severity and likelihood; incomplete evidence or missing edges can never artificially reduce risk score or produce an unearned clean bill of health.
+    - When evidence is incomplete ($C < 70$) and observed score is low ($\le 25$), explicit warnings are attached stating safety cannot be guaranteed.
+    - Explicit missing evidence disclosures for runtime execution telemetry, production traffic, operational tier, and test coverage.
+  - **Component-Level Risk Results**:
+    - Individual risk evaluations per changed file, changed symbol, and downstream affected target (`RiskTargetResult`).
+    - Stored with database-enforced uniqueness per `[analysisId, targetKey]` with specific reasons, supporting evidence, and unresolved limitations.
+    - Targets affected ONLY through unresolved or ambiguous dependency paths have `isConfirmed: false` and are not classified as confirmed affected targets.
+  - **Truthful Lifecycle Stages**:
+    - `risk_analysis_complete`: Fully evaluated without unresolved dependencies or upstream partial stages.
+    - `risk_analysis_partial`: Completed with unresolved/ambiguous dependencies or partial upstream stages.
+    - `risk_analysis_failed`: Failed prerequisite (missing or failed impact analysis, failed Git ingestion) or execution error.
+  - **Persistence & Idempotency**:
+    - Scoped strictly to `analysisId`, `repositoryId`, and `commitSha`.
+    - Transactions atomically replace previous risk assessment and target results for that `analysisId`.
+- Intelligence & Pre-Ship Health Verification Endpoints:
+  - **`GET /api/analyses/:id/review`**:
+    - Produces a comprehensive, grounded change review report (`ChangeReviewReport`).
+    - Explicitly segregates `verifiedFindings` (grounded in AST and confirmed graph edges) from `uncertainObservations` (unresolved imports, ambiguous exports, unconfirmed targets).
+    - Identifies critical dependency paths, prioritized suggested review areas, and explicit missing evidence limitations.
+  - **`GET /api/analyses/:id/commit-message`**:
+    - Generates conventional commit message proposals (`CommitMessageResult`).
+    - Infers scope deterministically from changed paths without LLM speculation.
+    - Classifies commit type (`feat`, `fix`, `refactor`, `test`, `chore`) using AST symbols and diff metadata.
+  - **`GET /api/analyses/:id/release-notes`**:
+    - Generates human-readable Markdown and structured JSON (`ReleaseNotesReport`).
+    - Categorizes changes into breaking changes, features, bug fixes, refactoring, and other changes.
+    - Highlights blast radius, confirmed exposure metrics, and recommended testing areas.
+  - **`GET /api/analyses/:id/health`**:
+    - Evaluates 10 deterministic pre-ship health checks (`PreShipHealthReport`):
+      1. `git_repository_validity`: Valid repository and commit SHA.
+      2. `git_ingestion_completeness`: Changed files extracted without unhandled diff truncations.
+      3. `ast_extraction_completeness`: AST parsed without fatal extraction errors.
+      4. `dependency_graph_completeness`: Graph nodes and edges populated.
+      5. `dependency_resolution_quality`: Edge resolution quality and uncertainty metrics.
+      6. `change_impact_completeness`: Traversal and impact results evaluated.
+      7. `risk_and_confidence_evaluation`: Scores and confidence within [0, 100].
+      8. `provenance_integrity`: Validates analysis, repository, and commit provenance.
+      9. `test_evidence_availability`: Checks for test file presence in change set.
+      10. `environment_configuration`: Environment configuration and DATABASE_URL verified.
+    - Yields `overallStatus`: `HEALTHY`, `DEGRADED`, or `UNHEALTHY`.
+  - **`POST /api/analyses/:id/health/gate`**:
+    - Evaluates configurable release gate policy (`ReleaseGateEvaluation`).
+    - Request payload accepts custom thresholds: `{ policy: { maxRiskScore?: number, minConfidence?: number, blockOnAnyFailedCheck?: boolean, allowedRiskLevels?: string[] } }`.
+    - Returns `passed: boolean`, `gateStatus: "PASSED" | "FAILED" | "WARNED"`, `blockingReasons: string[]`, and `warnings: string[]`.

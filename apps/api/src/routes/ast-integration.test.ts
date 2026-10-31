@@ -156,8 +156,8 @@ export class Broken {
 
     expect(analysisRes.statusCode).toBe(201);
     const job = analysisRes.json();
-    expect(job.status).toBe('running');
-    expect(job.finishedAt).toBeNull();
+    expect(job.status).toBe('partial');
+    expect(job.finishedAt).not.toBeNull();
     const analysisId = job.id;
 
     // Query persisted symbols

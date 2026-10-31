@@ -304,6 +304,472 @@ describe('Dependency Graph Resolver & Builder Unit Tests', () => {
       expect(unexported.status).toBe('unresolved');
       expect(unexported.reason).toBe('SYMBOL_NOT_EXPORTED');
     });
+
+    it('resolves default exports through multiple re-export layers', () => {
+      const multiLayerTracked = new Set([
+        'src/multi/core.ts',
+        'src/multi/mid.ts',
+        'src/multi/barrel.ts',
+      ]);
+      const multiLayerSymbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/multi/core.ts',
+          [
+            {
+              symbolKey: 'src/multi/core.ts#Engine:class:1:1',
+              name: 'Engine',
+              kind: 'class',
+              file: 'src/multi/core.ts',
+              lineStart: 1,
+              lineEnd: 10,
+              isExported: true,
+              exportKind: 'default',
+            },
+          ],
+        ],
+        [
+          'src/multi/mid.ts',
+          [
+            {
+              symbolKey: 'src/multi/mid.ts#default:export:1:1',
+              name: 'default',
+              kind: 'export',
+              file: 'src/multi/mid.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              isReExport: true,
+              reExportModule: './core.js',
+            },
+          ],
+        ],
+        [
+          'src/multi/barrel.ts',
+          [
+            {
+              symbolKey: 'src/multi/barrel.ts#default:export:1:1',
+              name: 'default',
+              kind: 'export',
+              file: 'src/multi/barrel.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              isReExport: true,
+              reExportModule: './mid.js',
+            },
+          ],
+        ],
+      ]);
+
+      const res = resolveExportedSymbol('src/multi/barrel.ts', 'default', multiLayerSymbols, multiLayerTracked);
+      expect(res.status).toBe('resolved');
+      expect(res.targetSymbolKey).toBe('src/multi/core.ts#Engine:class:1:1');
+      expect(res.targetFile).toBe('src/multi/core.ts');
+    });
+
+    it('resolves renamed local export clauses', () => {
+      const localRenameTracked = new Set(['src/local.ts']);
+      const localRenameSymbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/local.ts',
+          [
+            {
+              symbolKey: 'src/local.ts#baseVal:variable:1:7',
+              name: 'baseVal',
+              kind: 'variable',
+              file: 'src/local.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: false,
+            },
+            {
+              symbolKey: 'src/local.ts#baseVal:export:2:10',
+              name: 'baseVal',
+              kind: 'export',
+              file: 'src/local.ts',
+              lineStart: 2,
+              lineEnd: 2,
+              isExported: true,
+              exportKind: 'named',
+              exportAlias: 'exportedVal',
+              isReExport: false,
+            },
+          ],
+        ],
+      ]);
+
+      const res = resolveExportedSymbol('src/local.ts', 'exportedVal', localRenameSymbols, localRenameTracked);
+      expect(res.status).toBe('resolved');
+      expect(res.targetSymbolKey).toBe('src/local.ts#baseVal:variable:1:7');
+    });
+
+    it('resolves diamond wildcard re-exports to the single canonical declaration', () => {
+      const diamondTracked = new Set([
+        'src/diamond/root.ts',
+        'src/diamond/branchA.ts',
+        'src/diamond/branchB.ts',
+        'src/diamond/barrel.ts',
+      ]);
+      const diamondSymbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/diamond/root.ts',
+          [
+            {
+              symbolKey: 'src/diamond/root.ts#sharedUtil:function:1:1',
+              name: 'sharedUtil',
+              kind: 'function',
+              file: 'src/diamond/root.ts',
+              lineStart: 1,
+              lineEnd: 5,
+              isExported: true,
+            },
+          ],
+        ],
+        [
+          'src/diamond/branchA.ts',
+          [
+            {
+              symbolKey: 'src/diamond/branchA.ts#*:export:1:1',
+              name: '*',
+              kind: 'export',
+              file: 'src/diamond/branchA.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'all',
+              isReExport: true,
+              reExportModule: './root.js',
+            },
+          ],
+        ],
+        [
+          'src/diamond/branchB.ts',
+          [
+            {
+              symbolKey: 'src/diamond/branchB.ts#*:export:1:1',
+              name: '*',
+              kind: 'export',
+              file: 'src/diamond/branchB.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'all',
+              isReExport: true,
+              reExportModule: './root.js',
+            },
+          ],
+        ],
+        [
+          'src/diamond/barrel.ts',
+          [
+            {
+              symbolKey: 'src/diamond/barrel.ts#*:export:1:1',
+              name: '*',
+              kind: 'export',
+              file: 'src/diamond/barrel.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'all',
+              isReExport: true,
+              reExportModule: './branchA.js',
+            },
+            {
+              symbolKey: 'src/diamond/barrel.ts#*:export:2:1',
+              name: '*',
+              kind: 'export',
+              file: 'src/diamond/barrel.ts',
+              lineStart: 2,
+              lineEnd: 2,
+              isExported: true,
+              exportKind: 'all',
+              isReExport: true,
+              reExportModule: './branchB.js',
+            },
+          ],
+        ],
+      ]);
+
+      const res = resolveExportedSymbol('src/diamond/barrel.ts', 'sharedUtil', diamondSymbols, diamondTracked);
+      expect(res.status).toBe('resolved');
+      expect(res.targetSymbolKey).toBe('src/diamond/root.ts#sharedUtil:function:1:1');
+    });
+
+    it('resolves namespace re-export declarations', () => {
+      const nsTracked = new Set(['src/ns/barrel.ts', 'src/ns/tools.ts']);
+      const nsSymbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/ns/tools.ts',
+          [
+            {
+              symbolKey: 'src/ns/tools.ts#toolA:function:1:1',
+              name: 'toolA',
+              kind: 'function',
+              file: 'src/ns/tools.ts',
+              lineStart: 1,
+              lineEnd: 3,
+              isExported: true,
+            },
+          ],
+        ],
+        [
+          'src/ns/barrel.ts',
+          [
+            {
+              symbolKey: 'src/ns/barrel.ts#tools:export:1:1',
+              name: 'tools',
+              kind: 'export',
+              file: 'src/ns/barrel.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'all',
+              exportAlias: 'tools',
+              isReExport: true,
+              reExportModule: './tools.js',
+            },
+          ],
+        ],
+      ]);
+
+      const res = resolveExportedSymbol('src/ns/barrel.ts', 'tools', nsSymbols, nsTracked);
+      expect(res.status).toBe('resolved');
+      expect(res.targetFile).toBe('src/ns/tools.ts');
+      expect(res.targetSymbolKey).toBeUndefined();
+    });
+
+    it('resolves foo as default to the original foo declaration', () => {
+      const tracked = new Set(['src/alias/module.ts', 'src/alias/reexporter.ts']);
+      const symbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/alias/module.ts',
+          [
+            {
+              symbolKey: 'src/alias/module.ts#foo:function:1:1',
+              name: 'foo',
+              kind: 'function',
+              file: 'src/alias/module.ts',
+              lineStart: 1,
+              lineEnd: 3,
+              isExported: true,
+            },
+          ],
+        ],
+        [
+          'src/alias/reexporter.ts',
+          [
+            {
+              symbolKey: 'src/alias/reexporter.ts#foo:export:1:1',
+              name: 'foo',
+              kind: 'export',
+              file: 'src/alias/reexporter.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              exportAlias: 'default',
+              isReExport: true,
+              reExportModule: './module.js',
+            },
+          ],
+        ],
+      ]);
+
+      const res = resolveExportedSymbol('src/alias/reexporter.ts', 'default', symbols, tracked);
+      expect(res.status).toBe('resolved');
+      expect(res.targetSymbolKey).toBe('src/alias/module.ts#foo:function:1:1');
+      expect(res.targetFile).toBe('src/alias/module.ts');
+    });
+
+    it('resolves foo as default passing through two intermediate re-export modules', () => {
+      const tracked = new Set([
+        'src/chain/module.ts',
+        'src/chain/inter1.ts',
+        'src/chain/inter2.ts',
+        'src/chain/barrel.ts',
+      ]);
+      const symbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/chain/module.ts',
+          [
+            {
+              symbolKey: 'src/chain/module.ts#foo:function:1:1',
+              name: 'foo',
+              kind: 'function',
+              file: 'src/chain/module.ts',
+              lineStart: 1,
+              lineEnd: 3,
+              isExported: true,
+            },
+          ],
+        ],
+        [
+          'src/chain/inter1.ts',
+          [
+            {
+              symbolKey: 'src/chain/inter1.ts#foo:export:1:1',
+              name: 'foo',
+              kind: 'export',
+              file: 'src/chain/inter1.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              exportAlias: 'default',
+              isReExport: true,
+              reExportModule: './module.js',
+            },
+          ],
+        ],
+        [
+          'src/chain/inter2.ts',
+          [
+            {
+              symbolKey: 'src/chain/inter2.ts#default:export:1:1',
+              name: 'default',
+              kind: 'export',
+              file: 'src/chain/inter2.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              isReExport: true,
+              reExportModule: './inter1.js',
+            },
+          ],
+        ],
+        [
+          'src/chain/barrel.ts',
+          [
+            {
+              symbolKey: 'src/chain/barrel.ts#default:export:1:1',
+              name: 'default',
+              kind: 'export',
+              file: 'src/chain/barrel.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              isReExport: true,
+              reExportModule: './inter2.js',
+            },
+          ],
+        ],
+      ]);
+
+      const res = resolveExportedSymbol('src/chain/barrel.ts', 'default', symbols, tracked);
+      expect(res.status).toBe('resolved');
+      expect(res.targetSymbolKey).toBe('src/chain/module.ts#foo:function:1:1');
+      expect(res.targetFile).toBe('src/chain/module.ts');
+    });
+
+    it('resolves a renamed named export to its original declaration and rejects original name from re-exporter', () => {
+      const tracked = new Set(['src/renamed/module.ts', 'src/renamed/barrel.ts']);
+      const symbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/renamed/module.ts',
+          [
+            {
+              symbolKey: 'src/renamed/module.ts#foo:function:1:1',
+              name: 'foo',
+              kind: 'function',
+              file: 'src/renamed/module.ts',
+              lineStart: 1,
+              lineEnd: 3,
+              isExported: true,
+            },
+          ],
+        ],
+        [
+          'src/renamed/barrel.ts',
+          [
+            {
+              symbolKey: 'src/renamed/barrel.ts#foo:export:1:1',
+              name: 'foo',
+              kind: 'export',
+              file: 'src/renamed/barrel.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              exportAlias: 'renamed',
+              isReExport: true,
+              reExportModule: './module.js',
+            },
+          ],
+        ],
+      ]);
+
+      const resRenamed = resolveExportedSymbol('src/renamed/barrel.ts', 'renamed', symbols, tracked);
+      expect(resRenamed.status).toBe('resolved');
+      expect(resRenamed.targetSymbolKey).toBe('src/renamed/module.ts#foo:function:1:1');
+      expect(resRenamed.targetFile).toBe('src/renamed/module.ts');
+
+      const resOriginal = resolveExportedSymbol('src/renamed/barrel.ts', 'foo', symbols, tracked);
+      expect(resOriginal.status).toBe('unresolved');
+      expect(resOriginal.reason).toBe('SYMBOL_NOT_EXPORTED');
+    });
+
+    it('keeps a missing original export unresolved when re-exported as default or renamed', () => {
+      const tracked = new Set(['src/missing/module.ts', 'src/missing/barrel.ts']);
+      const symbols = new Map<string, SymbolRecord[]>([
+        [
+          'src/missing/module.ts',
+          [
+            {
+              symbolKey: 'src/missing/module.ts#other:function:1:1',
+              name: 'other',
+              kind: 'function',
+              file: 'src/missing/module.ts',
+              lineStart: 1,
+              lineEnd: 3,
+              isExported: true,
+            },
+          ],
+        ],
+        [
+          'src/missing/barrel.ts',
+          [
+            {
+              symbolKey: 'src/missing/barrel.ts#nonExistent:export:1:1',
+              name: 'nonExistent',
+              kind: 'export',
+              file: 'src/missing/barrel.ts',
+              lineStart: 1,
+              lineEnd: 1,
+              isExported: true,
+              exportKind: 'named',
+              exportAlias: 'default',
+              isReExport: true,
+              reExportModule: './module.js',
+            },
+            {
+              symbolKey: 'src/missing/barrel.ts#ghost:export:2:1',
+              name: 'ghost',
+              kind: 'export',
+              file: 'src/missing/barrel.ts',
+              lineStart: 2,
+              lineEnd: 2,
+              isExported: true,
+              exportKind: 'named',
+              exportAlias: 'renamedGhost',
+              isReExport: true,
+              reExportModule: './module.js',
+            },
+          ],
+        ],
+      ]);
+
+      const resDefault = resolveExportedSymbol('src/missing/barrel.ts', 'default', symbols, tracked);
+      expect(resDefault.status).toBe('unresolved');
+      expect(resDefault.reason).toBe('SYMBOL_NOT_EXPORTED');
+
+      const resRenamed = resolveExportedSymbol('src/missing/barrel.ts', 'renamedGhost', symbols, tracked);
+      expect(resRenamed.status).toBe('unresolved');
+      expect(resRenamed.reason).toBe('SYMBOL_NOT_EXPORTED');
+    });
   });
 
   describe('Full Graph Construction', () => {

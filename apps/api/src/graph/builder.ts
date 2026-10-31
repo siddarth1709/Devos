@@ -201,6 +201,16 @@ export function constructDependencyGraph(options: BuildGraphOptions): Dependency
               specifier: s.moduleSpecifier,
               targetFile: symRes.targetFile,
             };
+          } else if (symRes.status === 'resolved' && symRes.targetFile) {
+            symTargetKey = `file:${symRes.targetFile}`;
+            symResStatus = 'resolved';
+            symMetadata = {
+              importedName: s.importedName,
+              localName: s.localName,
+              specifier: s.moduleSpecifier,
+              targetFile: symRes.targetFile,
+              isNamespace: true,
+            };
           } else if (symRes.status === 'ambiguous') {
             symTargetKey = `file:${modRes.targetFile}`;
             symResStatus = 'ambiguous';
@@ -219,7 +229,7 @@ export function constructDependencyGraph(options: BuildGraphOptions): Dependency
           }
         }
 
-        const symEdgeKey = `file:${s.file}->${symTargetKey}:imports_symbol:${s.lineStart}:${s.colStart ?? 1}`;
+        const symEdgeKey = `file:${s.file}->${symTargetKey}:imports_symbol:${s.localName ?? s.name}:${s.lineStart}:${s.colStart ?? 1}`;
         addEdge({
           edgeKey: symEdgeKey,
           from: `file:${s.file}`,
@@ -299,6 +309,16 @@ export function constructDependencyGraph(options: BuildGraphOptions): Dependency
             specifier: s.reExportModule,
             targetFile: symRes.targetFile,
           };
+        } else if (symRes.status === 'resolved' && symRes.targetFile) {
+          targetKey = `file:${symRes.targetFile}`;
+          resStatus = 'resolved';
+          edgeMetadata = {
+            name: s.name,
+            exportAlias: s.exportAlias,
+            specifier: s.reExportModule,
+            targetFile: symRes.targetFile,
+            isNamespace: true,
+          };
         } else if (symRes.status === 'ambiguous') {
           targetKey = `file:${modRes.targetFile}`;
           resStatus = 'ambiguous';
@@ -317,7 +337,7 @@ export function constructDependencyGraph(options: BuildGraphOptions): Dependency
         }
       }
 
-      const reExportEdgeKey = `file:${s.file}->${targetKey}:re_exports:${s.lineStart}:${s.colStart ?? 1}`;
+      const reExportEdgeKey = `file:${s.file}->${targetKey}:re_exports:${s.exportAlias ?? s.name}:${s.lineStart}:${s.colStart ?? 1}`;
       addEdge({
         edgeKey: reExportEdgeKey,
         from: `file:${s.file}`,
@@ -410,6 +430,44 @@ export interface BuildAndPersistGraphOptions {
   symbols: SymbolRecord[];
 }
 
+export function validateGraphProvenance(
+  nodes: Array<{ analysisId: string; repositoryId: string; commitSha: string; collector: string; nodeKey: string }>,
+  edges: Array<{ analysisId: string; repositoryId: string; commitSha: string; sourceFile: string; collector: string; edgeKey: string }>
+): void {
+  for (const edge of edges) {
+    if (!edge.analysisId || typeof edge.analysisId !== 'string' || edge.analysisId.trim() === '') {
+      throw new Error(`Edge "${edge.edgeKey}" is missing valid analysisId provenance`);
+    }
+    if (!edge.repositoryId || typeof edge.repositoryId !== 'string' || edge.repositoryId.trim() === '') {
+      throw new Error(`Edge "${edge.edgeKey}" is missing valid repositoryId provenance`);
+    }
+    if (!edge.commitSha || typeof edge.commitSha !== 'string' || edge.commitSha.trim() === '') {
+      throw new Error(`Edge "${edge.edgeKey}" is missing valid commitSha provenance`);
+    }
+    if (!edge.sourceFile || typeof edge.sourceFile !== 'string' || edge.sourceFile.trim() === '') {
+      throw new Error(`Edge "${edge.edgeKey}" is missing valid sourceFile provenance`);
+    }
+    if (!edge.collector || typeof edge.collector !== 'string' || edge.collector.trim() === '') {
+      throw new Error(`Edge "${edge.edgeKey}" is missing valid collector provenance`);
+    }
+  }
+
+  for (const node of nodes) {
+    if (!node.analysisId || typeof node.analysisId !== 'string' || node.analysisId.trim() === '') {
+      throw new Error(`Node "${node.nodeKey}" is missing valid analysisId provenance`);
+    }
+    if (!node.repositoryId || typeof node.repositoryId !== 'string' || node.repositoryId.trim() === '') {
+      throw new Error(`Node "${node.nodeKey}" is missing valid repositoryId provenance`);
+    }
+    if (!node.commitSha || typeof node.commitSha !== 'string' || node.commitSha.trim() === '') {
+      throw new Error(`Node "${node.nodeKey}" is missing valid commitSha provenance`);
+    }
+    if (!node.collector || typeof node.collector !== 'string' || node.collector.trim() === '') {
+      throw new Error(`Node "${node.nodeKey}" is missing valid collector provenance`);
+    }
+  }
+}
+
 export async function buildAndPersistDependencyGraph(
   options: BuildAndPersistGraphOptions,
   client = prisma
@@ -476,6 +534,8 @@ export async function buildAndPersistDependencyGraph(
       collector: 'dependency-graph-builder',
       metadata: e.metadata ? JSON.stringify(e.metadata) : null,
     }));
+
+    validateGraphProvenance(nodeInputs, edgeInputs);
 
     await client.$transaction(async (tx) => {
       await deleteDependencyEdgesByAnalysis(analysisId, tx as any);

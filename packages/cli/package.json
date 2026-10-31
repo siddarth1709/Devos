@@ -1,0 +1,21 @@
+{
+  "name": "@devos/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "devos": "./bin/devos.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node ./dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  }
+}
