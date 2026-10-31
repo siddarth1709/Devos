@@ -5,6 +5,15 @@ import { runReview } from './commands/review.js';
 import { runHealth } from './commands/health.js';
 import { runGuard } from './commands/guard.js';
 import { runInit } from './commands/init.js';
+import { runRepos } from './commands/repos.js';
+import { runConnect } from './commands/connect.js';
+import { runGraph } from './commands/graph.js';
+import { runFindings } from './commands/findings.js';
+import { runRisk } from './commands/risk.js';
+import { runActions } from './commands/actions.js';
+import { runAuth } from './commands/auth.js';
+import { runDoctor } from './commands/doctor.js';
+import { runConfig } from './commands/config.js';
 import { DevosApiError } from './api.js';
 
 export const VERSION = '0.1.0';
@@ -17,13 +26,23 @@ USAGE:
   devos <command> [options]
 
 COMMANDS:
+  init [path]             Initialize .devos.json configuration in target repository
+  login                   Authenticate CLI with DEVOS account via GitHub
+  logout                  Log out of current session
+  repos                   List all registered repositories
+  connect <path> [name]   Connect and register a repository
   analyze [path]          Run full ingestion, AST, impact, and risk analysis on a repository
   status <id>             Get execution status and metadata for an analysis
   report <id>             Display comprehensive risk, blast radius, and impact report
+  graph <id>              Display dependency graph nodes and edges
   review <id>             Display change review report with verified findings
-  health [id]             Check API health or verify 10 pre-ship health checks for an analysis
+  findings <id>           List deterministic and AI findings with decision status
+  risk <id>               Display deterministic risk breakdown and contributing factors
   guard <id>              Evaluate configurable release gate policies
-  init [path]             Initialize .devos.json configuration in target repository
+  actions <subcommand>    Manage secure actions (list <id>, approve <id>, execute <id>)
+  config                  Display CLI configuration and API endpoints
+  doctor                  Run diagnostic health checks on API, Git, and inference
+  health [id]             Check API health or verify 10 pre-ship health checks for an analysis
 
 GLOBAL OPTIONS:
   -j, --json              Output results in structured JSON format
@@ -78,6 +97,10 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       headSha = arg.split('=')[1];
     } else if (arg === '--gate') {
       gate = true;
+    } else if (arg === '--token') {
+      process.env.DEVOS_API_TOKEN = args[++i];
+    } else if (arg.startsWith('--token=')) {
+      process.env.DEVOS_API_TOKEN = arg.split('=')[1];
     } else if (arg === '--policy') {
       policyPath = args[++i];
     } else if (arg.startsWith('--policy=')) {
@@ -91,6 +114,27 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
 
   try {
     switch (command) {
+      case 'init': {
+        const cwd = positional[1] || '.';
+        return await runInit({ cwd, json });
+      }
+      case 'login': {
+        return await runAuth({ action: 'login', apiUrl, json });
+      }
+      case 'logout': {
+        return await runAuth({ action: 'logout', apiUrl, json });
+      }
+      case 'whoami': {
+        return await runAuth({ action: 'whoami', apiUrl, json });
+      }
+      case 'repos': {
+        return await runRepos({ apiUrl, json });
+      }
+      case 'connect': {
+        const repoPath = positional[1] || '.';
+        const name = positional[2];
+        return await runConnect({ repoPath, name, apiUrl, json });
+      }
       case 'analyze': {
         const repoPath = positional[1] || '.';
         return await runAnalyze({
@@ -111,21 +155,42 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
         const analysisId = positional[1];
         return await runReport({ analysisId, apiUrl, json });
       }
+      case 'graph': {
+        const analysisId = positional[1];
+        return await runGraph({ analysisId, apiUrl, json });
+      }
       case 'review': {
         const analysisId = positional[1];
         return await runReview({ analysisId, apiUrl, json });
       }
-      case 'health': {
+      case 'findings': {
         const analysisId = positional[1];
-        return await runHealth({ analysisId, apiUrl, json, gate });
+        return await runFindings({ analysisId, apiUrl, json });
+      }
+      case 'risk': {
+        const analysisId = positional[1];
+        return await runRisk({ analysisId, apiUrl, json });
       }
       case 'guard': {
         const analysisId = positional[1];
         return await runGuard({ analysisId, policyPath, apiUrl, json });
       }
-      case 'init': {
-        const cwd = positional[1] || '.';
-        return await runInit({ cwd, json });
+      case 'actions': {
+        const subcommand = positional[1];
+        const targetId = positional[2];
+        return await runActions({ subcommand, targetId, apiUrl, json });
+      }
+      case 'config': {
+        const key = positional[1];
+        const value = positional[2];
+        return await runConfig({ key, value, apiUrl, json });
+      }
+      case 'doctor': {
+        return await runDoctor({ apiUrl, json });
+      }
+      case 'health': {
+        const analysisId = positional[1];
+        return await runHealth({ analysisId, apiUrl, json, gate });
       }
       case 'help': {
         printHelp();

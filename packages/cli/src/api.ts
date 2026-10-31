@@ -14,22 +14,29 @@ export class DevosApiError extends Error {
 
 export class DevosApiClient {
   private baseUrl: string;
+  private token?: string;
 
-  constructor(baseUrl?: string) {
+  constructor(baseUrl?: string, token?: string) {
     const raw = baseUrl || process.env.DEVOS_API_URL || 'http://127.0.0.1:3000';
     this.baseUrl = raw.replace(/\/+$/, '');
+    this.token = token || process.env.DEVOS_API_TOKEN;
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     let res: Response;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> || {}),
+    };
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+
     try {
       res = await fetch(url, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.headers || {}),
-        },
+        headers,
       });
     } catch (err: any) {
       throw new DevosApiError(
@@ -114,6 +121,62 @@ export class DevosApiClient {
 
   async completeAnalysis(id: string): Promise<any> {
     return this.request(`/api/analyses/${id}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async getGraph(id: string): Promise<any> {
+    return this.request(`/api/analyses/${id}/graph`);
+  }
+
+  async getFindings(id: string): Promise<any> {
+    return this.request(`/api/analyses/${id}/findings`);
+  }
+
+  async getComprehensiveReport(id: string): Promise<any> {
+    return this.request(`/api/analyses/${id}/report`);
+  }
+
+  async getGuardEvaluation(id: string): Promise<any> {
+    return this.request(`/api/analyses/${id}/guard`);
+  }
+
+  async postGuardEvaluation(id: string, payload: any = {}): Promise<any> {
+    return this.request(`/api/analyses/${id}/guard`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getActions(id: string): Promise<any> {
+    return this.request(`/api/analyses/${id}/actions`);
+  }
+
+  async getAction(actionId: string): Promise<any> {
+    return this.request(`/api/actions/${actionId}`);
+  }
+
+  async approveAction(actionId: string, payload: any = {}): Promise<any> {
+    return this.request(`/api/actions/${actionId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async executeAction(actionId: string): Promise<any> {
+    return this.request(`/api/actions/${actionId}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async getAuthStatus(): Promise<any> {
+    return this.request('/api/auth/me');
+  }
+
+  async logout(): Promise<any> {
+    return this.request('/api/auth/logout', {
       method: 'POST',
       body: JSON.stringify({}),
     });

@@ -32,6 +32,8 @@ export interface Repository {
   fullName: string;
   visibility: "public" | "private" | "internal";
   defaultBranch: string;
+  path?: string;
+  createdAt?: string;
   pushedAt?: string;
   updatedAt?: string;
   openIssuesCount?: number;
@@ -112,7 +114,8 @@ export interface FileDiffData {
 export type AnalysisJobStatus = "queued" | "running" | "completed" | "failed";
 
 export interface AnalysisJob {
-  jobId: string;
+  id?: string;
+  jobId?: string;
   repositoryId: string;
   pullRequestId?: string;
   baseSha?: string;
@@ -270,5 +273,110 @@ export interface ApiError {
   code?: string;
   status: number;
   details?: unknown;
+}
+
+export type FindingType = 'verified_evidence' | 'model_inference' | 'unverified_hypothesis';
+
+export interface AiStatusData {
+  enabled: boolean;
+  ollamaRunning: boolean;
+  endpoint: string;
+  configuredModel: string;
+  modelInstalled: boolean;
+  installedModels: string[];
+  error?: string | null;
+}
+
+export interface AiFinding {
+  id: string;
+  title: string;
+  description: string;
+  findingType: FindingType;
+  severity?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  confidence: ConfidenceLevel;
+  fileReferences: string[];
+  symbolReferences: string[];
+  evidenceReferences: string[];
+  uncertaintyExplanation?: string;
+}
+
+export interface AiChangeReviewData {
+  summary: string;
+  behavioralChanges: string[];
+  reviewPriorities: string[];
+  potentialRegressions: string[];
+  crossModuleConcerns: string[];
+  findings: AiFinding[];
+  missingEvidence: string[];
+  humanReviewQuestions: string[];
+  truncated: boolean;
+  timestamp: string;
+  model: string;
+}
+
+export interface AiRiskExplanationData {
+  summary: string;
+  scoreRationale: string;
+  contributingFactorsExplanation: string[];
+  affectedTargetsExplanation: string[];
+  confirmedExposureSummary: string;
+  unresolvedExposureSummary: string;
+  missingEvidenceSummary: string[];
+  uncertaintyAssessment: string;
+  nonFailureProbabilityNotice: string;
+  immutableRiskScore: number;
+  immutableRiskLevel: string;
+  findings: AiFinding[];
+  truncated: boolean;
+  model: string;
+}
+
+export interface AiCommitSuggestion {
+  type: string;
+  scope?: string;
+  subject: string;
+  body?: string;
+  bullets: string[];
+  isBreaking: boolean;
+  conventionalCommit: string;
+}
+
+export interface AiCommitData {
+  suggestions: AiCommitSuggestion[];
+  model: string;
+}
+
+export interface AiReleaseNotesData {
+  features: string[];
+  fixes: string[];
+  refactoring: string[];
+  internalChanges: string[];
+  breakingChanges: string[];
+  compatibilityConcerns: string[];
+  markdown: string;
+  model: string;
+}
+
+export interface AiQnAData {
+  question: string;
+  answer: string;
+  fileReferences: string[];
+  symbolReferences: string[];
+  evidenceReferences: string[];
+  confidence: ConfidenceLevel;
+  sufficientEvidence: boolean;
+  limitations: string[];
+  model: string;
+}
+
+export interface AiServiceResponse<T> {
+  success: boolean;
+  aiEnabled: boolean;
+  ollamaAvailable: boolean;
+  model: string;
+  data?: T;
+  fallback?: unknown;
+  error?: string;
+  notice?: string;
 }
 

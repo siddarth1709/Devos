@@ -114,34 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient, router]);
 
   const enterDemo = useCallback(async () => {
-    try {
-      const res = await api.createDemoSession();
-      queryClient.setQueryData(["demo", "status"], {
-        isDemo: true,
-        sessionType: "demo",
-        user: res.user,
-      });
-      await queryClient.invalidateQueries();
-      router.push("/app");
-    } catch (err) {
-      console.warn("Backend demo session creation failed, using client demo session fallback:", err);
-      // Fallback: enter demo in frontend with fixture
-      queryClient.setQueryData(["demo", "status"], {
-        isDemo: true,
-        sessionType: "demo",
-        user: {
-          id: "devos-demo-user",
-          login: "demo-investigator",
-          name: "DEVOS Demo Investigator",
-          email: "demo@devos.internal",
-          avatarUrl: "/brand/devos-mark.png",
-          role: "Demo Investigator" as const,
-          isDemo: true,
-        },
-      });
-      await queryClient.invalidateQueries();
-      router.push("/app");
-    }
+    const res = await api.createDemoSession();
+    queryClient.setQueryData(["demo", "status"], {
+      isDemo: true,
+      sessionType: "demo",
+      user: res.user,
+    });
+    await queryClient.invalidateQueries();
+    router.push("/app");
   }, [queryClient, router]);
 
   const exitDemo = useCallback(async () => {

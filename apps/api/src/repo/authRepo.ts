@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { prisma } from "../db.js";
+import { encrypt, decrypt } from "../lib/encryption.js";
 import type { User } from "@prisma/client";
 
 export interface GitHubUserProfile {
@@ -69,7 +70,8 @@ export class AuthRepository {
   /**
    * Upserts a local User record from verified GitHub profile data.
    */
-  async upsertGitHubUser(profile: GitHubUserProfile): Promise<User> {
+  async upsertGitHubUser(profile: GitHubUserProfile, accessToken?: string): Promise<User> {
+    const encryptedToken = accessToken ? encrypt(accessToken) : undefined;
     return prisma.user.upsert({
       where: { githubId: profile.githubId },
       update: {
@@ -77,6 +79,7 @@ export class AuthRepository {
         displayName: profile.displayName || profile.githubUsername,
         avatarUrl: profile.avatarUrl,
         email: profile.email,
+        ...(encryptedToken ? { githubAccessToken: encryptedToken } : {}),
         updatedAt: new Date(),
       },
       create: {
@@ -85,7 +88,28 @@ export class AuthRepository {
         displayName: profile.displayName || profile.githubUsername,
         avatarUrl: profile.avatarUrl,
         email: profile.email,
+        githubAccessToken: encryptedToken ?? null,
       },
+    });
+  }
+
+  async getUserAccessToken(userId: string): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { githubAccessToken: true },
+    });
+    if (!user?.githubAccessToken) return null;
+    try {
+      return decrypt(user.githubAccessToken);
+    } catch {
+      return null;
+    }
+  }
+
+  async clearUserAccessToken(userId: string): Promise<void> {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { githubAccessToken: null },
     });
   }
 

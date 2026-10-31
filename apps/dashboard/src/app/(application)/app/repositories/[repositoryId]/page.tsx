@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   GitBranch,
@@ -12,21 +12,50 @@ import {
   Globe,
   Lock,
   ChevronDown,
+  Play,
+  Terminal,
+  Folder,
 } from "lucide-react";
 import {
   useRepository,
   useBranches,
   usePullRequests,
+  useCreateAnalysis,
 } from "@/hooks/use-devos-api";
 
 export default function RepositoryDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const repositoryId = (params?.repositoryId as string) || "";
 
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [prSearch, setPrSearch] = useState("");
+
+  const [baseSha, setBaseSha] = useState("HEAD~1");
+  const [headSha, setHeadSha] = useState("HEAD");
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const createAnalysis = useCreateAnalysis();
+
+  const handleRunAnalysis = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAnalysisError(null);
+    try {
+      const res = await createAnalysis.mutateAsync({
+        repositoryId,
+        baseSha,
+        headSha,
+      });
+      const analysisId = (res as { id?: string; job?: { id?: string } })?.id || (res as { id?: string; job?: { id?: string } })?.job?.id;
+      if (analysisId) {
+        router.push(`/app/graph?repo=${encodeURIComponent(repositoryId)}&analysisId=${encodeURIComponent(analysisId)}`);
+      }
+    } catch (err: unknown) {
+      setAnalysisError(err instanceof Error ? err.message : "Failed to trigger analysis.");
+    }
+  };
 
   const {
     data: repository,
@@ -116,8 +145,14 @@ export default function RepositoryDetailPage() {
               </div>
 
               <h1 className="mt-2 font-display font-semibold text-[24px] sm:text-[28px] text-[#F0F2ED] tracking-[-0.03em]">
-                {repository?.fullName || decodeURIComponent(repositoryId)}
+                {repository?.name || repository?.fullName || decodeURIComponent(repositoryId)}
               </h1>
+              {repository?.path && (
+                <div className="mt-1 flex items-center gap-1.5 font-mono text-[11px] text-[#6E776F]">
+                  <Folder size={12} className="text-[#6E776F] shrink-0" />
+                  <span className="truncate">{repository.path}</span>
+                </div>
+              )}
             </div>
 
             {/* Branch Selector Combobox */}
@@ -197,7 +232,77 @@ export default function RepositoryDetailPage() {
         )}
       </div>
 
-      {/* 2. Pull Requests Section */}
+      {/* 2. Commit Range Analysis Execution Card */}
+      <div className="p-5 bg-[#101211] border border-[#292E2A] rounded-[6px] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Terminal size={15} className="text-[#C7F36B]" />
+            <h2 className="font-display font-medium text-[15px] text-[#F0F2ED]">
+              Execute Commit Analysis
+            </h2>
+          </div>
+          <span className="font-mono text-[10px] text-[#6E776F] uppercase tracking-wider">
+            Engine Analysis Lifecycle
+          </span>
+        </div>
+        <p className="font-body text-[12px] text-[#A0A79F]">
+          Trigger deterministic AST extraction, impact graph traversal, and pre-ship health validation for a commit range.
+        </p>
+
+        <form onSubmit={handleRunAnalysis} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 pt-1">
+          <div className="flex-1">
+            <label className="block font-mono text-[10px] uppercase text-[#6E776F] mb-1">
+              Base Ref / SHA
+            </label>
+            <input
+              type="text"
+              value={baseSha}
+              onChange={(e) => setBaseSha(e.target.value)}
+              placeholder="HEAD~1"
+              className="w-full h-[36px] px-3 bg-[#151816] border border-[#292E2A] rounded-[3px] font-mono text-[12px] text-[#F0F2ED] focus:outline-none focus:border-[#C7F36B]"
+            />
+          </div>
+
+          <div className="flex-1">
+            <label className="block font-mono text-[10px] uppercase text-[#6E776F] mb-1">
+              Head Ref / SHA
+            </label>
+            <input
+              type="text"
+              value={headSha}
+              onChange={(e) => setHeadSha(e.target.value)}
+              placeholder="HEAD"
+              className="w-full h-[36px] px-3 bg-[#151816] border border-[#292E2A] rounded-[3px] font-mono text-[12px] text-[#F0F2ED] focus:outline-none focus:border-[#C7F36B]"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={createAnalysis.isPending || !baseSha || !headSha}
+            className="h-[36px] px-5 bg-[#C7F36B] hover:bg-[#D7FF86] text-[#090A0A] font-mono text-[11px] font-semibold uppercase tracking-wider rounded-[3px] flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shrink-0"
+          >
+            {createAnalysis.isPending ? (
+              <>
+                <RefreshCw size={13} className="animate-spin" />
+                <span>Running...</span>
+              </>
+            ) : (
+              <>
+                <Play size={13} fill="currentColor" />
+                <span>Run Analysis</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {analysisError && (
+          <div className="p-3 bg-[#1F1414] border border-[#522525] rounded-[3px] text-[11px] font-mono text-[#F87171]">
+            {analysisError}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Pull Requests Section */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#1D221F]">
           <div className="flex items-center gap-2">

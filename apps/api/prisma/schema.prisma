@@ -40,6 +40,7 @@ model Analysis {
   dependencyNodes  DependencyNode[]
   dependencyEdges  DependencyEdge[]
   actionExecutions ActionExecution[]
+  guardEvaluations GuardEvaluation[]
   symbols          Symbol[]
   impactResults    ImpactResult[]
   riskAssessment   RiskAssessment?
@@ -168,6 +169,10 @@ model Finding {
   baseSha        String
   headSha        String
   collector      String
+  decision          String?
+  decisionActor     String?
+  decisionAt        DateTime?
+  decisionRationale String?
   createdAt      DateTime          @default(now())
   evidences      FindingEvidence[]
   rejectedClaims RejectedClaim[]
@@ -213,21 +218,28 @@ model Recommendation {
 }
 
 model ActionExecution {
-  id          String    @id @default(cuid())
-  analysisId  String?
-  analysis    Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  actionName  String
-  params      String
-  status      String
-  approvedBy  String?
-  approvedAt  DateTime?
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  output      String?
-  error       String?
-  commitSha   String
-  collector   String
-  createdAt   DateTime  @default(now())
+  id              String    @id @default(cuid())
+  analysisId      String?
+  analysis        Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  repositoryId    String?
+  actionName      String
+  actionType      String?
+  params          String
+  status          String
+  actor           String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  output          String?
+  executionLogs   String?
+  error           String?
+  commitSha       String
+  collector       String
+  createdAt       DateTime  @default(now())
 }
 
 model Investigation {
@@ -341,15 +353,16 @@ model RiskTargetResult {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  githubId       String    @unique
-  githubUsername String
-  displayName    String?
-  avatarUrl      String?
-  email          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  sessions       Session[]
+  id                String    @id @default(cuid())
+  githubId          String    @unique
+  githubUsername    String
+  displayName       String?
+  avatarUrl         String?
+  email             String?
+  githubAccessToken String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  sessions          Session[]
 }
 
 model Session {
@@ -369,3 +382,32 @@ model OAuthState {
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
+
+model GuardEvaluation {
+  id                  String    @id @default(cuid())
+  analysisId          String
+  analysis            Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  policyId            String    @default("default")
+  policyVersion       String    @default("1.0.0")
+  evaluatedThresholds String
+  checks              String
+  decision            String
+  warnings            String
+  blockingReasons     String
+  evidenceRefs        String
+  actor               String?
+  createdAt           DateTime  @default(now())
+
+  @@index([analysisId])
+  @@index([decision])
+}
+
+model GuardPolicy {
+  id          String    @id @default("default")
+  name        String
+  description String?
+  rules       String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+

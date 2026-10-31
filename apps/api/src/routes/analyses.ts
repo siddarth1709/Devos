@@ -920,4 +920,237 @@ export const analysisRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
 
     return evaluation;
   });
+
+  app.get<{ Params: { id: string } }>('/analyses/:id/files', async (request, reply) => {
+    const { id } = request.params;
+    const analysis = await getAnalysisById(id);
+    if (!analysis) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `Analysis "${id}" not found` },
+      });
+      return;
+    }
+
+    const files = await prisma.changedFile.findMany({
+      where: { analysisId: id },
+      orderBy: { path: 'asc' },
+    });
+
+    return {
+      analysisId: id,
+      files: files.map((f) => ({
+        id: f.id,
+        path: f.path,
+        changeType: f.changeType,
+        oldPath: f.oldPath,
+        baseSha: f.baseSha,
+        headSha: f.headSha,
+        collector: f.collector,
+        createdAt: f.createdAt.toISOString(),
+      })),
+    };
+  });
+
+  app.get<{ Params: { id: string } }>('/analyses/:id/symbols', async (request, reply) => {
+    const { id } = request.params;
+    const analysis = await getAnalysisById(id);
+    if (!analysis) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `Analysis "${id}" not found` },
+      });
+      return;
+    }
+
+    const symbols = await prisma.symbol.findMany({
+      where: { analysisId: id },
+      orderBy: { file: 'asc' },
+    });
+
+    return {
+      analysisId: id,
+      symbols: symbols.map((s) => ({
+        id: s.id,
+        symbolKey: s.symbolKey,
+        name: s.name,
+        kind: s.kind,
+        file: s.file,
+        lineStart: s.lineStart,
+        lineEnd: s.lineEnd,
+        isExported: s.isExported,
+        commitSha: s.commitSha,
+        collector: s.collector,
+      })),
+    };
+  });
+
+  app.get<{ Params: { id: string } }>('/analyses/:id/graph', async (request, reply) => {
+    const { id } = request.params;
+    const analysis = await getAnalysisById(id);
+    if (!analysis) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `Analysis "${id}" not found` },
+      });
+      return;
+    }
+
+    const [nodes, edges] = await Promise.all([
+      prisma.dependencyNode.findMany({ where: { analysisId: id } }),
+      prisma.dependencyEdge.findMany({ where: { analysisId: id } }),
+    ]);
+
+    return {
+      analysisId: id,
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        nodeKey: n.nodeKey,
+        nodeType: n.nodeType,
+        name: n.name,
+        path: n.path,
+        symbolKey: n.symbolKey,
+      })),
+      edges: edges.map((e) => ({
+        id: e.id,
+        edgeKey: e.edgeKey,
+        from: e.from,
+        to: e.to,
+        kind: e.kind,
+        sourceFile: e.sourceFile,
+        sourceLine: e.sourceLine,
+        resolutionStatus: e.resolutionStatus,
+      })),
+    };
+  });
+
+  app.get<{ Params: { id: string } }>('/analyses/:id/evidence', async (request, reply) => {
+    const { id } = request.params;
+    const analysis = await getAnalysisById(id);
+    if (!analysis) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `Analysis "${id}" not found` },
+      });
+      return;
+    }
+
+    const evidenceList = await prisma.evidence.findMany({
+      where: { analysisId: id },
+      orderBy: { collectedAt: 'asc' },
+    });
+
+    return {
+      analysisId: id,
+      evidence: evidenceList.map((e) => ({
+        id: e.id,
+        type: e.type,
+        sourceCommit: e.sourceCommit,
+        file: e.file,
+        lineStart: e.lineStart,
+        lineEnd: e.lineEnd,
+        symbol: e.symbol,
+        collector: e.collector,
+        collectedAt: e.collectedAt.toISOString(),
+      })),
+    };
+  });
+
+  app.get<{ Params: { id: string } }>('/analyses/:id/findings', async (request, reply) => {
+    const { id } = request.params;
+    const analysis = await getAnalysisById(id);
+    if (!analysis) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `Analysis "${id}" not found` },
+      });
+      return;
+    }
+
+    const findings = await prisma.finding.findMany({
+      where: { analysisId: id },
+      include: { evidences: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      analysisId: id,
+      findings: findings.map((f) => ({
+        id: f.id,
+        title: f.title,
+        severity: f.severity,
+        description: f.description,
+        origin: f.origin,
+        status: f.status,
+        confidence: f.confidence,
+        decision: f.decision,
+        decisionActor: f.decisionActor,
+        decisionAt: f.decisionAt ? f.decisionAt.toISOString() : null,
+        decisionRationale: f.decisionRationale,
+        evidenceIds: f.evidences.map((fe) => fe.evidenceId),
+        createdAt: f.createdAt.toISOString(),
+      })),
+    };
+  });
+
+  app.get<{ Params: { id: string } }>('/analyses/:id/report', async (request, reply) => {
+    const { id } = request.params;
+    const analysis = await getAnalysisById(id);
+    if (!analysis) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `Analysis "${id}" not found` },
+      });
+      return;
+    }
+
+    const [filesCount, symbolsCount, nodesCount, edgesCount, impactsCount, riskReport, findings] =
+      await Promise.all([
+        prisma.changedFile.count({ where: { analysisId: id } }),
+        prisma.symbol.count({ where: { analysisId: id } }),
+        prisma.dependencyNode.count({ where: { analysisId: id } }),
+        prisma.dependencyEdge.count({ where: { analysisId: id } }),
+        prisma.impactResult.count({ where: { analysisId: id } }),
+        getRiskAssessmentByAnalysis(id),
+        prisma.finding.findMany({ where: { analysisId: id } }),
+      ]);
+
+    const blockerCount = findings.filter(
+      (f) => f.severity === 'critical' || f.severity === 'high'
+    ).length;
+    const warningCount = findings.filter(
+      (f) => f.severity === 'medium' || f.severity === 'low'
+    ).length;
+
+    let readinessState: 'safe' | 'conditional' | 'unsafe' | 'unknown' = 'unknown';
+    if (analysis.status === 'completed' || analysis.status === 'done') {
+      if (blockerCount > 0 || (riskReport && riskReport.score >= 70)) {
+        readinessState = 'unsafe';
+      } else if (warningCount > 0 || (riskReport && riskReport.score >= 40)) {
+        readinessState = 'conditional';
+      } else {
+        readinessState = 'safe';
+      }
+    }
+
+    return {
+      jobId: analysis.id,
+      analysisId: analysis.id,
+      repositoryId: analysis.repositoryId,
+      baseSha: analysis.baseSha,
+      headSha: analysis.headSha,
+      status: analysis.status,
+      readinessState,
+      riskScore: riskReport ? riskReport.score : 0,
+      riskLevel: riskReport ? riskReport.level : 'Low',
+      confidence: riskReport ? String(riskReport.confidence) : 'High',
+      blockerCount,
+      warningCount,
+      summary: riskReport
+        ? `Analysis completed with risk score ${riskReport.score} (${riskReport.level}). ${blockerCount} blockers, ${warningCount} warnings.`
+        : `Analysis status: ${analysis.status}. ${filesCount} changed files.`,
+      stats: {
+        filesChanged: filesCount,
+        symbolsExtracted: symbolsCount,
+        nodesCount,
+        edgesCount,
+        impactResultsCount: impactsCount,
+        findingsCount: findings.length,
+      },
+    };
+  });
 };

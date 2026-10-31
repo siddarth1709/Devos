@@ -10,6 +10,15 @@ import {
 
 const isProduction = process.env.NODE_ENV === "production";
 
+function extractSessionToken(request: any): string | null {
+  const authHeader = request.headers.authorization;
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    const candidate = authHeader.slice(7).trim();
+    if (candidate) return candidate;
+  }
+  return parseSessionCookie(request.headers.cookie);
+}
+
 export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   /**
    * 1. GET /auth/github
@@ -153,13 +162,16 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
 
       // Upsert User in database
-      const user = await authRepo.upsertGitHubUser({
-        githubId: profile.id.toString(),
-        githubUsername: profile.login,
-        displayName: profile.name || profile.login,
-        avatarUrl: profile.avatar_url || null,
-        email: userEmail,
-      });
+      const user = await authRepo.upsertGitHubUser(
+        {
+          githubId: profile.id.toString(),
+          githubUsername: profile.login,
+          displayName: profile.name || profile.login,
+          avatarUrl: profile.avatar_url || null,
+          email: userEmail,
+        },
+        accessToken
+      );
 
       // Establish session
       const session = await authRepo.createSession(user.id);
@@ -184,7 +196,7 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
    * Returns authenticated user profile or 401.
    */
   app.get("/auth/me", async (request, reply) => {
-    const rawToken = parseSessionCookie(request.headers.cookie);
+    const rawToken = extractSessionToken(request);
     if (!rawToken) {
       return reply.status(401).send({
         error: {
@@ -196,7 +208,6 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     const user = await authRepo.validateSession(rawToken);
     if (!user) {
-      // Clear stale cookie
       reply.header("Set-Cookie", buildClearCookieHeader(isProduction));
       return reply.status(401).send({
         error: {
@@ -222,12 +233,8 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     };
   });
 
-  /**
-   * 4. GET /auth/github/status
-   * Safe status check used by frontend context/sidebar.
-   */
   app.get("/auth/github/status", async (request, reply) => {
-    const rawToken = parseSessionCookie(request.headers.cookie);
+    const rawToken = extractSessionToken(request);
     if (!rawToken) {
       return {
         status: "not_connected",
@@ -256,12 +263,8 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     };
   });
 
-  /**
-   * 5. POST /auth/logout
-   * Invalidates current session and clears cookie.
-   */
   app.post("/auth/logout", async (request, reply) => {
-    const rawToken = parseSessionCookie(request.headers.cookie);
+    const rawToken = extractSessionToken(request);
     if (rawToken) {
       await authRepo.invalidateSession(rawToken);
     }
@@ -273,12 +276,8 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     };
   });
 
-  /**
-   * 6. POST /auth/github/disconnect
-   * Disconnects account and invalidates all user sessions.
-   */
   app.post("/auth/github/disconnect", async (request, reply) => {
-    const rawToken = parseSessionCookie(request.headers.cookie);
+    const rawToken = extractSessionToken(request);
     if (!rawToken) {
       return reply.status(401).send({
         error: { code: "UNAUTHORIZED", message: "Not logged in" },
@@ -293,6 +292,7 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       });
     }
 
+    await authRepo.clearUserAccessToken(user.id);
     await authRepo.invalidateUserSessions(user.id);
     reply.header("Set-Cookie", buildClearCookieHeader(isProduction));
 

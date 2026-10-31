@@ -129,6 +129,9 @@ export async function deleteAnalysis(
     await tx.riskTargetResult.deleteMany({
       where: { analysisId: id },
     });
+    await tx.guardEvaluation.deleteMany({
+      where: { analysisId: id },
+    });
     await tx.riskAssessment.deleteMany({
       where: { analysisId: id },
     });

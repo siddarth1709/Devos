@@ -45,6 +45,15 @@ export async function getRepositoryByPath(
   });
 }
 
+export async function getRepositoryByName(
+  name: string,
+  client: DbClient = prisma
+): Promise<Repository | null> {
+  return client.repository.findFirst({
+    where: { name },
+  });
+}
+
 export async function listRepositories(client: DbClient = prisma): Promise<Repository[]> {
   return client.repository.findMany({
     orderBy: { createdAt: 'desc' },
@@ -88,6 +97,9 @@ export async function deleteRepository(
         },
       });
       await tx.riskTargetResult.deleteMany({
+        where: { analysisId: { in: analysisIds } },
+      });
+      await tx.guardEvaluation.deleteMany({
         where: { analysisId: { in: analysisIds } },
       });
       await tx.riskAssessment.deleteMany({

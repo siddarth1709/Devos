@@ -195,6 +195,20 @@ describe("Authentication & Session System", () => {
       expect(body.user).toBeUndefined();
     });
 
+    it("GET /api/auth/me returns user profile using Authorization: Bearer header", async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/auth/me",
+        headers: {
+          authorization: `Bearer ${validSessionToken}`,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.user.githubUsername).toBe("octocat_developer");
+    });
+
     it("POST /api/auth/logout invalidates session and clears cookie", async () => {
       // First ensure session is valid
       const before = await authRepo.validateSession(validSessionToken);
