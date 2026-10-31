@@ -2,7 +2,7 @@
 
 **Author:** Builder 1 (Frontend & Product Interface)  
 **Consumer:** Builder 2 (Backend, Database & AI Engine)  
-**Application Base URL:** `http://localhost:4000/api` (Configurable via `NEXT_PUBLIC_API_URL`)  
+**Application Base URL:** `http://localhost:3001/api` or `http://localhost:4000/api` (Configurable via `NEXT_PUBLIC_API_URL`)  
 **Status:** Defined & Integrated in Frontend API Client  
 
 ---

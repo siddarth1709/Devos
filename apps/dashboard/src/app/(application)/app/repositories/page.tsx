@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   FolderGit2,
@@ -13,20 +13,29 @@ import {
   Lock,
   Globe,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { useRepositories } from "@/hooks/use-devos-api";
 import { ConnectGitHubModal } from "@/components/app-shell/connect-github-modal";
+import { DEMO_REPOSITORY } from "@/lib/demo-fixtures";
 
 export default function RepositoriesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const { isDemo } = useAuth();
   const {
-    data: repositories,
+    data: liveRepositories,
     isLoading,
     isError,
     error,
     refetch,
     isFetching,
   } = useRepositories(searchQuery);
+
+  const repositories = useMemo(() => {
+    if (liveRepositories && liveRepositories.length > 0) return liveRepositories;
+    if (isDemo) return [DEMO_REPOSITORY];
+    return [];
+  }, [liveRepositories, isDemo]);
 
   const filteredRepos = repositories || [];
 
@@ -105,7 +114,7 @@ export default function RepositoriesPage() {
               </span>
               <p className="font-body text-[12px] text-[#A0A79F] leading-[1.6]">
                 {error?.message ||
-                  "Unable to load repositories. Please check if Builder 2's backend service is running on port 4000."}
+                  "Unable to load repositories. Please check if DEVOS backend service is running on port 3001 or 4000."}
               </p>
             </div>
           </div>
@@ -138,9 +147,18 @@ export default function RepositoriesPage() {
           {filteredRepos.map((repo) => (
             <Link
               key={repo.id}
-              href={`/app/repositories/${encodeURIComponent(repo.id)}`}
-              className="group p-5 bg-[#101211] border border-[#292E2A] hover:border-[#44553D] rounded-[4px] transition-all duration-200 flex flex-col justify-between"
+              href={
+                repo.id === DEMO_REPOSITORY.id
+                  ? "/app/graph?fixture=1"
+                  : `/app/repositories/${encodeURIComponent(repo.id)}`
+              }
+              className="group p-5 bg-[#101211] border border-[#292E2A] hover:border-[#44553D] rounded-[4px] transition-all duration-200 flex flex-col justify-between relative overflow-hidden"
             >
+              {repo.id === DEMO_REPOSITORY.id && (
+                <div className="absolute top-0 right-0 bg-[#E9B96E]/15 border-b border-l border-[#E9B96E]/30 px-2 py-0.5 rounded-bl font-mono text-[8px] font-bold tracking-wider text-[#E9B96E] uppercase">
+                  DEMO PROJECT
+                </div>
+              )}
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-[#1D221F]">
                   <span className="inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] px-2 py-0.5 rounded-[2px] bg-[#151816] border border-[#292E2A] text-[#A0A79F] uppercase">

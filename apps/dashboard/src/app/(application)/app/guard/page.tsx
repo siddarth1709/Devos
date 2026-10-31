@@ -9,6 +9,7 @@ import { CheckCategorySection } from "@/components/guard/check-category";
 import { GuardWarnings } from "@/components/guard/guard-warnings";
 import { GuardHistory } from "@/components/guard/guard-history";
 import { useAnalysisReport } from "@/hooks/use-devos-api";
+import { useAuth } from "@/hooks/use-auth";
 import {
   FIXTURE_GUARD_EVALUATION,
   FIXTURE_GUARD_HISTORY,
@@ -29,11 +30,13 @@ import {
 
 function GuardPageContent() {
   const searchParams = useSearchParams();
+  const { isDemo } = useAuth();
   const repoParam = searchParams.get("repo") || "siddarth1709-Devos";
   const prParam = searchParams.get("pr") || "2";
-  const initialFixture = searchParams.get("fixture") === "1";
+  const initialFixture = searchParams.get("fixture") === "1" || isDemo;
 
   const [useFixtureMode, setUseFixtureMode] = useState<boolean>(initialFixture);
+  const isEffectiveFixture = isDemo || useFixtureMode;
 
   // Fetch live backend analysis
   const {
@@ -44,7 +47,7 @@ function GuardPageContent() {
 
   // Determine active Guard Evaluation
   const evaluation: GuardEvaluation = useMemo(() => {
-    if (useFixtureMode) {
+    if (isEffectiveFixture) {
       return FIXTURE_GUARD_EVALUATION;
     }
 
@@ -276,7 +279,7 @@ function GuardPageContent() {
 
         {/* Historical Evaluation Runs */}
         <GuardHistory
-          history={useFixtureMode ? FIXTURE_GUARD_HISTORY : []}
+          history={isEffectiveFixture ? FIXTURE_GUARD_HISTORY : []}
           isBackendConnected={evaluation.isBackendConnected}
           isFixturePreview={useFixtureMode}
         />

@@ -1,9 +1,20 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, Menu, Activity } from "lucide-react";
+import {
+  ChevronRight,
+  Menu,
+  Activity,
+  LogOut,
+  User as UserIcon,
+  ChevronDown,
+  ExternalLink,
+} from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
+import { DevosLogo } from "@/components/brand/devos-logo";
+import { useAuth } from "@/hooks/use-auth";
 import { useGitHubStatus } from "@/hooks/use-devos-api";
 
 interface ApplicationHeaderProps {
@@ -16,14 +27,28 @@ export function ApplicationHeader({
   onOpenConnectModal,
 }: ApplicationHeaderProps) {
   const pathname = usePathname();
-  const { data: githubStatus, isError, isLoading } = useGitHubStatus();
+  const { user, isAuthenticated, isDemo, logout, exitDemo } = useAuth();
+  const { isError, isLoading } = useGitHubStatus();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownOpen]);
 
   // Compute breadcrumbs based on pathname
   const segments = pathname.split("/").filter(Boolean);
-  // e.g. ["app", "repositories", "123", "pulls", "456"]
-  const breadcrumbs = [
-    { label: "Console", href: "/app" },
-  ];
+  const breadcrumbs = [{ label: "Console", href: "/app" }];
 
   if (segments.includes("repositories")) {
     breadcrumbs.push({ label: "Repositories", href: "/app/repositories" });
@@ -55,7 +80,7 @@ export function ApplicationHeader({
 
   return (
     <header className="h-[64px] sticky top-0 z-30 w-full bg-[#090A0A]/85 backdrop-blur-md border-b border-[#292E2A] px-4 sm:px-6 flex items-center justify-between">
-      {/* Left: Mobile Toggle & Breadcrumbs */}
+      {/* Left: Mobile Toggle, Brand Icon & Breadcrumbs */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
@@ -65,6 +90,14 @@ export function ApplicationHeader({
         >
           <Menu size={18} />
         </button>
+
+        <Link
+          href="/app"
+          className="md:hidden flex items-center text-[#F0F2ED] shrink-0"
+          aria-label="DEVOS home"
+        >
+          <DevosLogo size="sm" showWordmark={false} />
+        </Link>
 
         {/* Dynamic Breadcrumbs */}
         <nav
@@ -101,7 +134,7 @@ export function ApplicationHeader({
         {/* Backend Connectivity Status Pill */}
         <div
           className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-[3px] border border-[#222724] bg-[#101211] font-mono text-[10px] text-[#A0A79F]"
-          title="Backend API Status (Builder 2 at http://localhost:4000/api)"
+          title="Backend API Status (Fastify on port 3001)"
         >
           <span
             className={`w-1.5 h-1.5 rounded-full ${
@@ -113,28 +146,118 @@ export function ApplicationHeader({
             }`}
           />
           <span className="hidden lg:inline">
-            {isError ? "API: Awaiting Backend" : "API: Operational"}
+            {isError ? "API: Awaiting Backend" : "API: Connected"}
           </span>
           <Activity size={12} className="text-[#6E776F]" />
         </div>
 
-        {/* GitHub Connection Action / Badge */}
-        {githubStatus?.status === "connected" ? (
-          <div className="flex items-center gap-2 px-3 py-1 rounded-[4px] bg-[#151816] border border-[#292E2A] text-[11px] font-mono text-[#F0F2ED]">
-            <GithubIcon size={13} className="text-[#79D69A]" />
-            <span className="truncate max-w-[100px]">
-              {githubStatus.user?.login || "Connected"}
-            </span>
+        {/* Authenticated User Menu or Sign In */}
+        {isAuthenticated && user ? (
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen((prev) => !prev)}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-[4px] bg-[#151816] hover:bg-[#1D221F] border border-[#292E2A] text-[11px] font-mono text-[#F0F2ED] transition-colors"
+              aria-expanded={dropdownOpen}
+              aria-haspopup="true"
+            >
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatarUrl}
+                  alt={user.login || "Avatar"}
+                  className="w-5 h-5 rounded-full border border-[#292E2A]"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-[#1D221F] border border-[#292E2A] flex items-center justify-center text-[10px] text-[#C7F36B] font-semibold">
+                  {(user.login || "U").slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <span className="truncate max-w-[110px] hidden sm:inline">
+                {user.login}
+              </span>
+              <ChevronDown size={12} className="text-[#6E776F]" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {dropdownOpen && (
+              <div className="absolute right-0 mt-2 w-64 rounded-lg bg-[#101211] border border-[#292E2A] shadow-xl p-3 z-50 text-xs font-mono animate-in fade-in duration-100">
+                <div className="pb-3 border-b border-[#1D221F] space-y-1">
+                  <div className="font-semibold text-[#F0F2ED] truncate">
+                    {user.name || user.login}
+                  </div>
+                  <div className="text-[11px] text-[#A0A79F] truncate">
+                    @{user.login}
+                  </div>
+                  {user.email && (
+                    <div className="text-[10px] text-[#6E776F] truncate">
+                      {user.email}
+                    </div>
+                  )}
+                  <div className="pt-1">
+                    <span
+                      className={`inline-block px-1.5 py-0.5 rounded text-[9px] uppercase font-semibold ${
+                        isDemo
+                          ? "bg-[#E9B96E]/15 text-[#E9B96E] border border-[#E9B96E]/30"
+                          : "bg-[#C7F36B]/15 text-[#C7F36B] border border-[#C7F36B]/30"
+                      }`}
+                    >
+                      {user.role || (isDemo ? "Demo Investigator" : "Developer")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="py-2 border-b border-[#1D221F] space-y-1">
+                  {isDemo ? (
+                    <Link
+                      href="/login"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center justify-between px-2 py-1.5 rounded text-[#C7F36B] hover:bg-[#151816] transition-colors"
+                    >
+                      <span>Connect Real GitHub</span>
+                      <ExternalLink size={12} />
+                    </Link>
+                  ) : (
+                    <a
+                      href={`https://github.com/${user.login}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between px-2 py-1.5 rounded text-[#A0A79F] hover:text-[#F0F2ED] hover:bg-[#151816] transition-colors"
+                    >
+                      <span>View GitHub Profile</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      if (isDemo) {
+                        exitDemo();
+                      } else {
+                        logout();
+                      }
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[#F07878] hover:bg-[#F07878]/10 transition-colors"
+                  >
+                    <LogOut size={13} />
+                    <span>{isDemo ? "Exit Demo Mode" : "Sign Out"}</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={onOpenConnectModal}
-            className="inline-flex items-center gap-1.5 px-3 h-[32px] bg-transparent border border-[#3A4338] text-[#C7F36B] hover:bg-[#C7F36B] hover:text-[#090A0A] font-mono text-[10px] tracking-wider uppercase font-semibold rounded-[3px] transition-all active:scale-[0.98]"
-          >
-            <GithubIcon size={12} />
-            <span className="hidden xs:inline">Connect GitHub</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 px-3 h-[32px] bg-[#C7F36B] text-[#090A0A] font-mono text-[10px] tracking-wider uppercase font-semibold rounded-[3px] hover:bg-[#D7FF86] transition-all active:scale-[0.98]"
+            >
+              <GithubIcon size={12} />
+              <span>Sign in</span>
+            </Link>
+          </div>
         )}
       </div>
     </header>
