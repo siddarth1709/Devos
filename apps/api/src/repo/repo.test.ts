@@ -93,6 +93,7 @@ describe('Typed Data-Access Layer & Prisma Persistence', () => {
         }
       }
     }
+    await testPrisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
   });
 
   afterAll(async () => {
@@ -566,15 +567,106 @@ describe('Typed Data-Access Layer & Prisma Persistence', () => {
         testPrisma
       );
 
-      expect(await getAnalysisById(analysis.id, testPrisma)).not.toBeNull();
+      const node = await createDependencyNode(
+        {
+          analysisId: analysis.id,
+          nodeKey: 'src/main.ts',
+          nodeType: 'file',
+          name: 'main.ts',
+          path: 'src/main.ts',
+          repositoryId: repo.id,
+          commitSha: analysis.headSha,
+          collector: 'cascade-test',
+        },
+        testPrisma
+      );
 
-      // Delete repository
+      const edge = await createDependencyEdge(
+        {
+          analysisId: analysis.id,
+          edgeKey: 'src/main.ts->src/dep.ts',
+          repositoryId: repo.id,
+          from: 'src/main.ts',
+          to: 'src/dep.ts',
+          kind: 'import',
+          sourceFile: 'src/main.ts',
+          sourceLine: 1,
+          commitSha: analysis.headSha,
+          collector: 'cascade-test',
+        },
+        testPrisma
+      );
+
+      const impact = await testPrisma.impactResult.create({
+        data: {
+          analysisId: analysis.id,
+          repositoryId: repo.id,
+          commitSha: analysis.headSha,
+          resultKey: 'impact-key-1',
+          targetKey: 'target-key-1',
+          targetType: 'file',
+          sourceChangeKey: 'change-1',
+          sourceChangeFile: 'src/main.ts',
+          classification: 'direct',
+          depth: 1,
+          path: 'src/main.ts',
+          relationshipTypes: 'import',
+          edgeKeys: 'src/main.ts->src/dep.ts',
+        },
+      });
+
+      const risk = await testPrisma.riskAssessment.create({
+        data: {
+          analysisId: analysis.id,
+          repositoryId: repo.id,
+          commitSha: analysis.headSha,
+          score: 80,
+          level: 'high',
+          severity: 4,
+          likelihood: 4,
+          confidence: 85,
+          factors: '[]',
+          highestRiskTargets: '[]',
+          limitations: '[]',
+          missingEvidence: '[]',
+        },
+      });
+
+      const targetResult = await testPrisma.riskTargetResult.create({
+        data: {
+          analysisId: analysis.id,
+          repositoryId: repo.id,
+          commitSha: analysis.headSha,
+          targetKey: 'target-1',
+          targetType: 'file',
+          score: 80,
+          level: 'high',
+          severity: 4,
+          likelihood: 4,
+          confidence: 85,
+          reasons: '[]',
+          evidence: '[]',
+          unresolvedLimitations: '[]',
+        },
+      });
+
+      expect(await getAnalysisById(analysis.id, testPrisma)).not.toBeNull();
+      expect(await testPrisma.dependencyNode.findUnique({ where: { id: node.id } })).not.toBeNull();
+      expect(await testPrisma.dependencyEdge.findUnique({ where: { id: edge.id } })).not.toBeNull();
+      expect(await testPrisma.impactResult.findUnique({ where: { id: impact.id } })).not.toBeNull();
+      expect(await testPrisma.riskAssessment.findUnique({ where: { id: risk.id } })).not.toBeNull();
+      expect(await testPrisma.riskTargetResult.findUnique({ where: { id: targetResult.id } })).not.toBeNull();
+
       await deleteRepository(repo.id, testPrisma);
 
-      // Verify repository and cascaded entities are deleted
       expect(await getRepositoryById(repo.id, testPrisma)).toBeNull();
       expect(await getAnalysisById(analysis.id, testPrisma)).toBeNull();
       expect(await listSymbolsByRepository(repo.id, testPrisma)).toEqual([]);
+      expect(await testPrisma.dependencyNode.findMany({ where: { repositoryId: repo.id } })).toEqual([]);
+      expect(await testPrisma.dependencyEdge.findMany({ where: { repositoryId: repo.id } })).toEqual([]);
+      expect(await testPrisma.impactResult.findMany({ where: { repositoryId: repo.id } })).toEqual([]);
+      expect(await testPrisma.riskAssessment.findMany({ where: { repositoryId: repo.id } })).toEqual([]);
+      expect(await testPrisma.riskTargetResult.findMany({ where: { repositoryId: repo.id } })).toEqual([]);
     });
   });
 });

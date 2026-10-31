@@ -33,37 +33,136 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate database client & build API
+      - name: Build workspace contracts
+        run: pnpm --filter @devos/contracts build
+
+      - name: Deploy Prisma database migrations
         env:
           DATABASE_URL: file:./ci.db
         run: |
           pnpm --filter api exec prisma generate --schema prisma/schema.prisma
           pnpm --filter api exec prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Build API and CLI packages
+        run: |
           pnpm --filter api build
           pnpm --filter @devos/cli build
+
+      - name: Typecheck and build dashboard
+        run: |
+          pnpm --filter @devos/dashboard typecheck
+          pnpm --filter @devos/dashboard build
+
+      - name: Run contracts tests
+        run: pnpm --filter @devos/contracts test
+
+      - name: Run API tests
+        env:
+          DATABASE_URL: file:./ci.db
+        run: pnpm --filter api test
+
+      - name: Run CLI tests
+        run: pnpm --filter @devos/cli test
 
       - name: Start DEVOS API Service
         env:
           PORT: 3000
           HOST: 127.0.0.1
-          NODE_ENV: test
+          NODE_ENV: ci
           DATABASE_URL: file:./ci.db
           ALLOWED_REPO_ROOT: ${{ github.workspace }}
         run: |
-          node apps/api/dist/server.js &
+          node apps/api/dist/server.js > api-server.log 2>&1 &
           API_PID=$!
           echo "API_PID=$API_PID" >> $GITHUB_ENV
-          npx wait-on http://127.0.0.1:3000/api/health --timeout 30000
 
-      - name: Run DEVOS CLI Analysis & Release Gate
-        id: devos
+          for i in $(seq 1 30); do
+            if ! kill -0 $API_PID 2>/dev/null; then
+              echo "Error: DEVOS API server exited prematurely. Server logs:"
+              cat api-server.log
+              exit 1
+            fi
+            if curl -s -f http://127.0.0.1:3000/api/health >/dev/null; then
+              echo "DEVOS API Service is healthy and accepting requests"
+              break
+            fi
+            sleep 1
+          done
+
+          if ! curl -s -f http://127.0.0.1:3000/api/health >/dev/null; then
+            echo "Error: Timed out waiting for DEVOS API health endpoint. Server logs:"
+            cat api-server.log
+            exit 1
+          fi
+
+      - name: Setup CI Fixture Repository
         run: |
-          node packages/cli/bin/devos.js analyze ${{ github.workspace }} \
+          FIXTURE_DIR="${{ github.workspace }}/.ci-fixture"
+          rm -rf "$FIXTURE_DIR"
+          mkdir -p "$FIXTURE_DIR/src"
+          cd "$FIXTURE_DIR"
+          git init -b main
+          git config user.name "DEVOS CI"
+          git config user.email "ci@devos.dev"
+
+          cat << 'EOF' > src/math.ts
+          export function add(a: number, b: number): number {
+            return a + b;
+          }
+          EOF
+
+          cat << 'EOF' > src/index.ts
+          import { add } from './math';
+          export function calculateTotal(items: number[]): number {
+            return items.reduce((sum, item) => add(sum, item), 0);
+          }
+          EOF
+
+          cat << 'EOF' > src/math.test.ts
+          import { add } from './math';
+          if (add(1, 2) !== 3) throw new Error('fail');
+          EOF
+
+          git add .
+          git commit -m "chore: initial commit"
+
+          cat << 'EOF' > src/math.ts
+          export function add(a: number, b: number): number {
+            if (typeof a !== 'number' || typeof b !== 'number') {
+              throw new TypeError('Invalid arguments');
+            }
+            return a + b;
+          }
+          EOF
+
+          git add .
+          git commit -m "feat(math): add input validation to add"
+          echo "FIXTURE_DIR=$FIXTURE_DIR" >> $GITHUB_ENV
+
+      - name: Run Deterministic Analysis and Inspection
+        run: |
+          node packages/cli/bin/devos.js analyze "$FIXTURE_DIR" \
             --gate \
-            --json > devos-analysis-output.json || true
+            --json > devos-analysis-output.json
           cat devos-analysis-output.json
 
+          ANALYSIS_ID=$(node -e 'const data = JSON.parse(require("fs").readFileSync("devos-analysis-output.json", "utf8")); console.log(data.analysis.id);')
+          echo "ANALYSIS_ID=$ANALYSIS_ID" >> $GITHUB_ENV
+
+          echo "Inspecting Analysis Status:"
+          node packages/cli/bin/devos.js status "$ANALYSIS_ID"
+
+          echo "Inspecting Blast Radius Report:"
+          node packages/cli/bin/devos.js report "$ANALYSIS_ID"
+
+          echo "Inspecting Pre-Ship Health Checks:"
+          node packages/cli/bin/devos.js health "$ANALYSIS_ID"
+
+          echo "Evaluating Release Gate Policy:"
+          node packages/cli/bin/devos.js guard "$ANALYSIS_ID"
+
       - name: Publish GitHub Step Summary
+        if: always()
         run: |
           node -e '
             const fs = require("fs");
@@ -74,6 +173,7 @@ jobs:
               summary.push("## DEVOS Change Intelligence & Release Gate Summary");
               if (data.analysis) {
                 summary.push("- **Analysis ID**: " + data.analysis.id);
+                summary.push("- **Status**: " + data.analysis.status);
                 summary.push("- **Commit Range**: " + (data.analysis.baseSha || "").substring(0, 7) + ".." + (data.analysis.headSha || "").substring(0, 7));
               }
               if (data.risk) {
@@ -100,7 +200,10 @@ jobs:
         run: |
           node -e '
             const fs = require("fs");
-            if (!fs.existsSync("devos-analysis-output.json")) process.exit(1);
+            if (!fs.existsSync("devos-analysis-output.json")) {
+              console.error("Error: Analysis output not found");
+              process.exit(1);
+            }
             const data = JSON.parse(fs.readFileSync("devos-analysis-output.json", "utf8"));
             if (data.gate && !data.gate.passed) {
               console.error("DEVOS Release Gate Failed: Blocked by quality policy");
@@ -108,3 +211,12 @@ jobs:
             }
             console.log("DEVOS Release Gate Passed: Safe to ship");
           '
+
+      - name: Teardown and Cleanup
+        if: always()
+        run: |
+          if [ -n "$API_PID" ]; then
+            kill "$API_PID" 2>/dev/null || true
+          fi
+          rm -rf "${{ github.workspace }}/.ci-fixture"
+          rm -f apps/api/prisma/ci.db apps/api/prisma/ci.db-journal api-server.log devos-analysis-output.json
