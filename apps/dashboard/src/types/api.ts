@@ -32,6 +32,8 @@ export interface Repository {
   fullName: string;
   visibility: "public" | "private" | "internal";
   defaultBranch: string;
+  path?: string;
+  createdAt?: string;
   pushedAt?: string;
   updatedAt?: string;
   openIssuesCount?: number;
@@ -112,7 +114,8 @@ export interface FileDiffData {
 export type AnalysisJobStatus = "queued" | "running" | "completed" | "failed";
 
 export interface AnalysisJob {
-  jobId: string;
+  id?: string;
+  jobId?: string;
   repositoryId: string;
   pullRequestId?: string;
   baseSha?: string;

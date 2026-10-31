@@ -75,36 +75,13 @@ function ActionsPageContent() {
 
   const handleExecuteAction = async (
     action: ActionDefinition,
-    params: Record<string, unknown>
+    _params: Record<string, unknown>
   ) => {
-    if (isDemo) {
-      setNotification({
-        type: "info",
-        message: `[DEMO SIMULATOR] Action '${action.name}' validated and simulated successfully. In demonstration mode, real repository modifications are prohibited.`,
-      });
-      setActiveModalAction(null);
-      return;
-    }
-    try {
-      await createActionMutation.mutateAsync({
-        type: action.type,
-        target: `${repoParam}#${prParam}`,
-        params,
-      });
-
-      setNotification({
-        type: "info",
-        message: `Action '${action.name}' submitted to backend engine. Tracking execution status in audit trail.`,
-      });
-      setActiveModalAction(null);
-    } catch {
-      // Truthful error handling
-      setNotification({
-        type: "warning",
-        message: `Backend action execution endpoint returned unavailable or offline. DEVOS does not simulate unverified executions. Inspect audit logs or connect Builder 2 backend.`,
-      });
-      setActiveModalAction(null);
-    }
+    setNotification({
+      type: "info",
+      message: `Action Dispatcher Awaiting Integration: Real repository mutation for '${action.name}' requires the '/api/actions' endpoint. No unverified actions are simulated.`,
+    });
+    setActiveModalAction(null);
   };
 
   return (

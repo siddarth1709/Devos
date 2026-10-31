@@ -17,6 +17,11 @@ import type {
   ApiError,
 } from "@/types/api";
 import type { ActionRequest, ActionResult } from "@/types/actions";
+import type {
+  BackendImpactReport,
+  BackendPreShipHealthReport,
+  BackendReleaseGateEvaluation,
+} from "@/lib/api-adapters";
 
 export const queryKeys = {
   githubStatus: ["auth", "github", "status"] as const,
@@ -31,6 +36,10 @@ export const queryKeys = {
   diff: (repoId: string, prId: string, path: string) =>
     ["repositories", repoId, "pulls", prId, "diff", path] as const,
   analysis: (jobId: string) => ["analysis", jobId] as const,
+  impact: (analysisId: string) => ["analysis", analysisId, "impact"] as const,
+  review: (analysisId: string) => ["analysis", analysisId, "review"] as const,
+  preShipHealth: (analysisId: string) => ["analysis", analysisId, "health"] as const,
+  releaseGate: (analysisId: string) => ["analysis", analysisId, "gate"] as const,
   dependencyGraph: (repoId: string, analysisId?: string) =>
     ["repositories", repoId, "graph", analysisId || "latest"] as const,
   analysisReport: (analysisId: string) => ["analysis", analysisId, "report"] as const,
@@ -44,7 +53,7 @@ export function useGitHubStatus() {
   return useQuery<GitHubConnectionState, ApiError>({
     queryKey: queryKeys.githubStatus,
     queryFn: () => api.getGitHubStatus(),
-    retry: false, // Don't spam if backend is not yet started
+    retry: false,
     staleTime: 60_000,
   });
 }
@@ -59,8 +68,8 @@ export function useRepositories(searchQuery?: string) {
       return repos.filter(
         (r) =>
           r.name.toLowerCase().includes(q) ||
-          r.owner.toLowerCase().includes(q) ||
-          r.fullName.toLowerCase().includes(q)
+          (r.owner && r.owner.toLowerCase().includes(q)) ||
+          (r.path && r.path.toLowerCase().includes(q))
       );
     },
     retry: false,
@@ -74,6 +83,22 @@ export function useRepository(repoId: string) {
     queryFn: () => api.getRepository(repoId),
     enabled: Boolean(repoId),
     retry: false,
+  });
+}
+
+export function useCreateRepository() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    Repository,
+    ApiError,
+    { name?: string; path: string; defaultBranch?: string }
+  >({
+    mutationFn: (payload) => api.createRepository(payload),
+    onSuccess: (newRepo) => {
+      queryClient.invalidateQueries({ queryKey: ["repositories"] });
+      queryClient.setQueryData(queryKeys.repository(newRepo.id), newRepo);
+    },
   });
 }
 
@@ -122,6 +147,22 @@ export function useFileDiff(repoId: string, prId: string, filePath: string) {
   });
 }
 
+export function useCreateAnalysis() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    AnalysisJob,
+    ApiError,
+    { repositoryId: string; baseSha: string; headSha: string }
+  >({
+    mutationFn: (payload) => api.createAnalysis(payload),
+    onSuccess: (job) => {
+      queryClient.invalidateQueries({ queryKey: ["analysis"] });
+      queryClient.setQueryData(queryKeys.analysis(job.id || (job as { id?: string; jobId?: string }).jobId || ""), job);
+    },
+  });
+}
+
 export function useTriggerAnalysis(repoId: string, prId: string) {
   const queryClient = useQueryClient();
 
@@ -131,7 +172,73 @@ export function useTriggerAnalysis(repoId: string, prId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.pullRequest(repoId, prId),
       });
-      queryClient.setQueryData(queryKeys.analysis(job.jobId), job);
+      queryClient.setQueryData(queryKeys.analysis(job.id || (job as { id?: string; jobId?: string }).jobId || ""), job);
+    },
+  });
+}
+
+export function useAnalysisStatus(jobId?: string) {
+  return useQuery<{ job: AnalysisJob; report: AnalysisReport | null }, ApiError>({
+    queryKey: queryKeys.analysis(jobId || ""),
+    queryFn: () => api.getAnalysisStatus(jobId!),
+    enabled: Boolean(jobId),
+    retry: false,
+    staleTime: 10_000,
+  });
+}
+
+export function useImpactReport(analysisId?: string) {
+  return useQuery<BackendImpactReport, ApiError>({
+    queryKey: queryKeys.impact(analysisId || ""),
+    queryFn: () => api.getImpactReport(analysisId!),
+    enabled: Boolean(analysisId),
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useChangeReview(analysisId?: string) {
+  return useQuery<Record<string, unknown>, ApiError>({
+    queryKey: queryKeys.review(analysisId || ""),
+    queryFn: () => api.getChangeReview(analysisId!),
+    enabled: Boolean(analysisId),
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function usePreShipHealth(analysisId?: string) {
+  return useQuery<BackendPreShipHealthReport, ApiError>({
+    queryKey: queryKeys.preShipHealth(analysisId || ""),
+    queryFn: () => api.getPreShipHealth(analysisId!),
+    enabled: Boolean(analysisId),
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useReleaseGateStatus(analysisId?: string) {
+  return useQuery<BackendReleaseGateEvaluation, ApiError>({
+    queryKey: queryKeys.releaseGate(analysisId || ""),
+    queryFn: () => api.evaluateReleaseGate(analysisId!),
+    enabled: Boolean(analysisId),
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useEvaluateReleaseGate(analysisId?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    BackendReleaseGateEvaluation,
+    ApiError,
+    { policy?: Record<string, unknown> } | void
+  >({
+    mutationFn: (vars) => api.evaluateReleaseGate(analysisId!, vars?.policy),
+    onSuccess: (evaluation) => {
+      queryClient.setQueryData(queryKeys.releaseGate(analysisId!), evaluation);
+      queryClient.invalidateQueries({ queryKey: queryKeys.preShipHealth(analysisId!) });
     },
   });
 }
@@ -142,7 +249,7 @@ export function useDependencyGraph(repoId: string, analysisId?: string) {
     queryFn: () => api.getDependencyGraph(repoId, analysisId),
     enabled: Boolean(repoId),
     retry: false,
-    staleTime: 60_000,
+    staleTime: 30_000,
   });
 }
 
@@ -215,6 +322,3 @@ export function useApproveAction() {
     },
   });
 }
-
-
-
