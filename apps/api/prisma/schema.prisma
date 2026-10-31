@@ -41,6 +41,9 @@ model Analysis {
   dependencyEdges  DependencyEdge[]
   actionExecutions ActionExecution[]
   symbols          Symbol[]
+  impactResults    ImpactResult[]
+  riskAssessment   RiskAssessment?
+  riskTargetResults RiskTargetResult[]
 }
 
 model ChangedFile {
@@ -109,6 +112,7 @@ model DependencyEdge {
   metadata         String?
   createdAt        DateTime  @default(now())
 
+  @@unique([analysisId, edgeKey])
   @@index([analysisId])
   @@index([edgeKey])
   @@index([from])
@@ -252,6 +256,88 @@ model RejectedClaim {
   headSha    String
   collector  String
   createdAt  DateTime @default(now())
+}
+
+model ImpactResult {
+  id                 String    @id @default(cuid())
+  analysisId         String
+  analysis           Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  repositoryId       String
+  commitSha          String
+  resultKey          String
+  targetKey          String
+  targetType         String
+  targetFile         String?
+  targetSymbol       String?
+  sourceChangeKey    String
+  sourceChangeFile   String
+  sourceChangeSymbol String?
+  classification     String
+  depth              Int
+  path               String
+  relationshipTypes  String
+  edgeKeys           String
+  resolutionStatus   String    @default("resolved")
+  collector          String    @default("change-impact-analyzer")
+  metadata           String?
+  createdAt          DateTime  @default(now())
+
+  @@unique([analysisId, resultKey])
+  @@index([analysisId])
+  @@index([targetKey])
+  @@index([sourceChangeKey])
+  @@index([classification])
+}
+
+model RiskAssessment {
+  id                 String    @id @default(cuid())
+  analysisId         String    @unique
+  analysis           Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  repositoryId       String
+  commitSha          String
+  score              Int
+  level              String
+  severity           Int
+  likelihood         Int
+  confidence         Int
+  modelVersion       String    @default("v1.1.0-deterministic")
+  factors            String
+  highestRiskTargets String
+  limitations        String
+  missingEvidence    String
+  metadata           String?
+  collector          String    @default("deterministic-risk-engine")
+  createdAt          DateTime  @default(now())
+
+  @@index([analysisId])
+  @@index([level])
+}
+
+model RiskTargetResult {
+  id                    String    @id @default(cuid())
+  analysisId            String
+  analysis              Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  repositoryId          String
+  commitSha             String
+  targetKey             String
+  targetType            String
+  targetFile            String?
+  targetSymbol          String?
+  score                 Int
+  level                 String
+  severity              Int
+  likelihood            Int
+  confidence            Int
+  reasons               String
+  evidence              String
+  unresolvedLimitations String
+  collector             String    @default("deterministic-risk-engine")
+  createdAt             DateTime  @default(now())
+
+  @@unique([analysisId, targetKey])
+  @@index([analysisId])
+  @@index([targetKey])
+  @@index([level])
 }
 
 model User {

@@ -17,6 +17,28 @@ import {
 } from '../repo/index.js';
 import { collectAndExtractSymbols, ExtractionMetrics } from '../ast/index.js';
 import { buildAndPersistDependencyGraph } from '../graph/index.js';
+import {
+  executeImpactAnalysisForAnalysis,
+  getImpactReportByAnalysis,
+  listImpactResultsByAnalysis,
+} from '../impact/index.js';
+import {
+  executeRiskAnalysisForAnalysis,
+  getRiskAssessmentByAnalysis,
+  getRiskTargetResult,
+} from '../risk/index.js';
+import {
+  completeAnalysisLifecycle,
+  constructAnalysisReport,
+} from '../lifecycle/index.js';
+import {
+  generateChangeReviewReport,
+  generateSmartCommitMessage,
+  generateReleaseNotesReport,
+  evaluatePreShipHealth,
+  evaluateReleaseGate,
+  ReleaseGatePolicy,
+} from '../intelligence/index.js';
 import { prisma } from '../db.js';
 
 export interface ExecuteAstExtractionOptions {
@@ -307,6 +329,7 @@ export const analysisRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
     });
 
     if (!extractionResult.success) {
+      await completeAnalysisLifecycle(analysis.id).catch(() => null);
       reply.status(500).send({
         error: {
           code: 'AST_EXTRACTION_FAILED',
@@ -333,6 +356,7 @@ export const analysisRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
     });
 
     if (!graphResult.success) {
+      await completeAnalysisLifecycle(analysis.id).catch(() => null);
       reply.status(500).send({
         error: {
           code: 'DEPENDENCY_GRAPH_FAILED',
@@ -342,15 +366,49 @@ export const analysisRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
       return;
     }
 
+    const impactResult = await executeImpactAnalysisForAnalysis({
+      analysisId: analysis.id,
+      repoPath,
+    });
+
+    if (!impactResult.success) {
+      await completeAnalysisLifecycle(analysis.id).catch(() => null);
+      reply.status(500).send({
+        error: {
+          code: 'IMPACT_ANALYSIS_FAILED',
+          message: `Impact analysis failed: ${impactResult.error ?? 'Unknown error'}`,
+        },
+      });
+      return;
+    }
+
+    const riskResult = await executeRiskAnalysisForAnalysis({
+      analysisId: analysis.id,
+      repoPath,
+    });
+
+    if (!riskResult.success) {
+      await completeAnalysisLifecycle(analysis.id).catch(() => null);
+      reply.status(500).send({
+        error: {
+          code: 'RISK_ANALYSIS_FAILED',
+          message: `Risk analysis failed: ${riskResult.error ?? 'Unknown error'}`,
+        },
+      });
+      return;
+    }
+
+    const completion = await completeAnalysisLifecycle(analysis.id);
+
     const response: CreateAnalysisResponse = {
-      id: analysis.id,
-      repositoryId: analysis.repositoryId,
-      baseSha: analysis.baseSha,
-      headSha: analysis.headSha,
-      status: 'running',
-      startedAt: analysis.startedAt ? analysis.startedAt.toISOString() : null,
-      finishedAt: null,
-      error: analysis.error,
+      id: completion.analysis.id,
+      repositoryId: completion.analysis.repositoryId,
+      baseSha: completion.analysis.baseSha,
+      headSha: completion.analysis.headSha,
+      status: completion.status,
+      startedAt: completion.analysis.startedAt ? completion.analysis.startedAt.toISOString() : null,
+      finishedAt: completion.analysis.finishedAt ? completion.analysis.finishedAt.toISOString() : null,
+      error: completion.analysis.error,
     };
 
     reply.status(201).send(response);
@@ -371,6 +429,17 @@ export const analysisRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
       return;
     }
 
+    let report: any = null;
+    if (analysis.status === 'completed' || analysis.status === 'done' || analysis.status === 'partial') {
+      const risk = await getRiskAssessmentByAnalysis(params.id);
+      if (risk) {
+        const symbols = await prisma.symbol.findMany({
+          where: { analysisId: params.id },
+        });
+        report = constructAnalysisReport(analysis.id, risk, symbols);
+      }
+    }
+
     const response: GetAnalysisResponse = {
       job: {
         id: analysis.id,
@@ -382,9 +451,473 @@ export const analysisRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
         finishedAt: analysis.finishedAt ? analysis.finishedAt.toISOString() : null,
         error: analysis.error,
       },
-      report: null, // Report generation is staged for subsequent AI / AST milestones
+      report,
     };
 
     return response;
+  });
+
+  app.post('/analyses/:id/complete', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    try {
+      const completion = await completeAnalysisLifecycle(params.id);
+      return {
+        job: {
+          id: completion.analysis.id,
+          repositoryId: completion.analysis.repositoryId,
+          baseSha: completion.analysis.baseSha,
+          headSha: completion.analysis.headSha,
+          status: completion.status,
+          startedAt: completion.analysis.startedAt ? completion.analysis.startedAt.toISOString() : null,
+          finishedAt: completion.analysis.finishedAt ? completion.analysis.finishedAt.toISOString() : null,
+          error: completion.analysis.error,
+        },
+        report: completion.report,
+      };
+    } catch (err: any) {
+      const message = err.message || String(err);
+      if (message.startsWith('PREMATURE_COMPLETION:')) {
+        reply.status(400).send({
+          error: {
+            code: 'PREMATURE_COMPLETION',
+            message: message.replace('PREMATURE_COMPLETION: ', ''),
+          },
+        });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  app.post('/analyses/:id/impact', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const repo = await getRepositoryById(analysis.repositoryId);
+    const repoPath = repo?.path ?? null;
+
+    const result = await executeImpactAnalysisForAnalysis({
+      analysisId: analysis.id,
+      repoPath,
+    });
+
+    if (!result.success) {
+      reply.status(500).send({
+        error: {
+          code: 'IMPACT_ANALYSIS_FAILED',
+          message: result.error ?? 'Impact analysis failed',
+        },
+      });
+      return;
+    }
+
+    return result.report;
+  });
+
+  app.get('/analyses/:id/impact', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const report = await getImpactReportByAnalysis(params.id);
+    if (!report) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Impact report for analysis "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    return report;
+  });
+
+  app.get('/analyses/:id/impact/targets/:targetKey', async (request, reply) => {
+    const params = request.params as { id: string; targetKey: string };
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const decodedTargetKey = decodeURIComponent(params.targetKey);
+    const allResults = await listImpactResultsByAnalysis(params.id);
+    const matching = allResults.filter((r) => r.targetKey === decodedTargetKey);
+
+    if (matching.length === 0) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Impact target "${decodedTargetKey}" not found for analysis "${params.id}"`,
+        },
+      });
+      return;
+    }
+
+    return {
+      targetKey: decodedTargetKey,
+      impacts: matching,
+    };
+  });
+
+  app.post('/analyses/:id/risk', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const repo = await getRepositoryById(analysis.repositoryId);
+    const repoPath = repo?.path ?? null;
+
+    const result = await executeRiskAnalysisForAnalysis({
+      analysisId: analysis.id,
+      repoPath,
+    });
+
+    if (!result.success) {
+      reply.status(500).send({
+        error: {
+          code: 'RISK_ANALYSIS_FAILED',
+          message: result.error ?? 'Risk analysis failed',
+        },
+      });
+      return;
+    }
+
+    return result.report;
+  });
+
+  app.get('/analyses/:id/risk', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const report = await getRiskAssessmentByAnalysis(params.id);
+    if (!report) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Risk assessment report for analysis "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    return report;
+  });
+
+  app.get('/analyses/:id/risk/targets/:targetKey', async (request, reply) => {
+    const params = request.params as { id: string; targetKey: string };
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const decodedTargetKey = decodeURIComponent(params.targetKey);
+    const targetResult = await getRiskTargetResult(params.id, decodedTargetKey);
+
+    if (!targetResult) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Risk target "${decodedTargetKey}" not found for analysis "${params.id}"`,
+        },
+      });
+      return;
+    }
+
+    return targetResult;
+  });
+
+  app.get('/analyses/:id/review', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const changedFiles = await prisma.changedFile.findMany({
+      where: { analysisId: params.id },
+    });
+    const symbols = await prisma.symbol.findMany({
+      where: { analysisId: params.id },
+    });
+    const riskReport = await getRiskAssessmentByAnalysis(params.id);
+
+    const report = generateChangeReviewReport({
+      analysisId: analysis.id,
+      repositoryId: analysis.repositoryId,
+      commitSha: analysis.headSha,
+      changedFiles: changedFiles.map((f) => ({ path: f.path, changeType: f.changeType })),
+      changedSymbols: symbols.map((s) => ({
+        name: s.name,
+        kind: s.kind,
+        file: s.file,
+        isExported: s.isExported,
+      })),
+      riskReport,
+    });
+
+    return report;
+  });
+
+  app.get('/analyses/:id/commit-message', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const repo = await getRepositoryById(analysis.repositoryId);
+    const changedFiles = await prisma.changedFile.findMany({
+      where: { analysisId: params.id },
+    });
+    const symbols = await prisma.symbol.findMany({
+      where: { analysisId: params.id },
+    });
+
+    const result = generateSmartCommitMessage({
+      changedFiles: changedFiles.map((f) => ({
+        path: f.path,
+        changeType: f.changeType,
+        oldPath: f.oldPath,
+      })),
+      changedSymbols: symbols.map((s) => ({
+        name: s.name,
+        kind: s.kind,
+        file: s.file,
+        isExported: s.isExported,
+      })),
+      repositoryName: repo?.name,
+    });
+
+    return result;
+  });
+
+  app.get('/analyses/:id/release-notes', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const changedFiles = await prisma.changedFile.findMany({
+      where: { analysisId: params.id },
+    });
+    const symbols = await prisma.symbol.findMany({
+      where: { analysisId: params.id },
+    });
+    const riskReport = await getRiskAssessmentByAnalysis(params.id);
+
+    const report = generateReleaseNotesReport({
+      analysisId: analysis.id,
+      repositoryId: analysis.repositoryId,
+      commitSha: analysis.headSha,
+      changedFiles: changedFiles.map((f) => ({
+        path: f.path,
+        changeType: f.changeType,
+        oldPath: f.oldPath,
+      })),
+      changedSymbols: symbols.map((s) => ({
+        name: s.name,
+        kind: s.kind,
+        file: s.file,
+        isExported: s.isExported,
+      })),
+      riskAssessment: riskReport,
+    });
+
+    return report;
+  });
+
+  app.get('/analyses/:id/health', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const changedFiles = await prisma.changedFile.findMany({
+      where: { analysisId: params.id },
+    });
+    const symbolsCount = await prisma.symbol.count({
+      where: { analysisId: params.id },
+    });
+    const nodesCount = await prisma.dependencyNode.count({
+      where: { analysisId: params.id },
+    });
+    const edgesCount = await prisma.dependencyEdge.count({
+      where: { analysisId: params.id },
+    });
+    const impactsCount = await prisma.impactResult.count({
+      where: { analysisId: params.id },
+    });
+    const riskReport = await getRiskAssessmentByAnalysis(params.id);
+
+    const testFilesFound = changedFiles.some(
+      (f) => f.path.includes('.test.') || f.path.includes('.spec.')
+    );
+
+    const report = evaluatePreShipHealth({
+      analysisId: analysis.id,
+      repositoryId: analysis.repositoryId,
+      commitSha: analysis.headSha,
+      changedFilesCount: changedFiles.length,
+      symbolsCount,
+      dependencyNodesCount: nodesCount,
+      dependencyEdgesCount: edgesCount,
+      impactResultsCount: impactsCount,
+      riskAssessment: riskReport,
+      testFilesFound,
+      databaseUrlConfigured: Boolean(process.env.DATABASE_URL),
+    });
+
+    return report;
+  });
+
+  app.post('/analyses/:id/health/gate', async (request, reply) => {
+    const params = GetAnalysisParamsSchema.parse(request.params);
+    const analysis = await getAnalysisById(params.id);
+
+    if (!analysis) {
+      reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Analysis with ID "${params.id}" not found`,
+        },
+      });
+      return;
+    }
+
+    const body = (request.body as { policy?: ReleaseGatePolicy }) ?? {};
+    const changedFiles = await prisma.changedFile.findMany({
+      where: { analysisId: params.id },
+    });
+    const symbolsCount = await prisma.symbol.count({
+      where: { analysisId: params.id },
+    });
+    const nodesCount = await prisma.dependencyNode.count({
+      where: { analysisId: params.id },
+    });
+    const edgesCount = await prisma.dependencyEdge.count({
+      where: { analysisId: params.id },
+    });
+    const impactsCount = await prisma.impactResult.count({
+      where: { analysisId: params.id },
+    });
+    const riskReport = await getRiskAssessmentByAnalysis(params.id);
+
+    const testFilesFound = changedFiles.some(
+      (f) => f.path.includes('.test.') || f.path.includes('.spec.')
+    );
+
+    const evaluation = evaluateReleaseGate(
+      {
+        analysisId: analysis.id,
+        repositoryId: analysis.repositoryId,
+        commitSha: analysis.headSha,
+        changedFilesCount: changedFiles.length,
+        symbolsCount,
+        dependencyNodesCount: nodesCount,
+        dependencyEdgesCount: edgesCount,
+        impactResultsCount: impactsCount,
+        riskAssessment: riskReport,
+        testFilesFound,
+        databaseUrlConfigured: Boolean(process.env.DATABASE_URL),
+      },
+      body.policy
+    );
+
+    return evaluation;
   });
 };

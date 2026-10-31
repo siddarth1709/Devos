@@ -1,0 +1,106 @@
+name: DEVOS Change Intelligence & Release Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  devos-analysis:
+    name: DEVOS Analysis & Pre-Ship Guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enable Corepack & Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@11.11.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate database client & build API
+        run: |
+          pnpm --filter api exec prisma generate --schema prisma/schema.prisma
+          pnpm --filter api exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm --filter api build
+          pnpm --filter @devos/cli build
+
+      - name: Start DEVOS API Service
+        env:
+          PORT: 3000
+          HOST: 127.0.0.1
+          NODE_ENV: test
+          DATABASE_URL: file:./ci.db
+          ALLOWED_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          node apps/api/dist/server.js &
+          API_PID=$!
+          echo "API_PID=$API_PID" >> $GITHUB_ENV
+          npx wait-on http://127.0.0.1:3000/api/health --timeout 30000
+
+      - name: Run DEVOS CLI Analysis & Release Gate
+        id: devos
+        run: |
+          node packages/cli/bin/devos.js analyze ${{ github.workspace }} \
+            --gate \
+            --json > devos-analysis-output.json || true
+          cat devos-analysis-output.json
+
+      - name: Publish GitHub Step Summary
+        run: |
+          node -e '
+            const fs = require("fs");
+            if (!fs.existsSync("devos-analysis-output.json")) process.exit(0);
+            try {
+              const data = JSON.parse(fs.readFileSync("devos-analysis-output.json", "utf8"));
+              const summary = [];
+              summary.push("## DEVOS Change Intelligence & Release Gate Summary");
+              if (data.analysis) {
+                summary.push("- **Analysis ID**: " + data.analysis.id);
+                summary.push("- **Commit Range**: " + (data.analysis.baseSha || "").substring(0, 7) + ".." + (data.analysis.headSha || "").substring(0, 7));
+              }
+              if (data.risk) {
+                summary.push("- **Risk Score**: " + data.risk.score + "/100 (" + (data.risk.level || "").toUpperCase() + ")");
+                summary.push("- **Confidence**: " + data.risk.confidence + "%");
+                summary.push("- **Confirmed Impact**: " + (data.risk.confirmedExposure?.directDependentsCount ?? 0) + " direct dependents");
+              }
+              if (data.gate) {
+                summary.push("- **Gate Status**: " + data.gate.gateStatus + " (" + (data.gate.passed ? "PASSED" : "FAILED") + ")");
+                if (data.gate.blockingReasons && data.gate.blockingReasons.length > 0) {
+                  summary.push("\n### Blocking Reasons");
+                  for (const r of data.gate.blockingReasons) {
+                    summary.push("- " + r);
+                  }
+                }
+              }
+              fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary.join("\n") + "\n");
+            } catch (err) {
+              console.error(err);
+            }
+          '
+
+      - name: Enforce Release Gate
+        run: |
+          node -e '
+            const fs = require("fs");
+            if (!fs.existsSync("devos-analysis-output.json")) process.exit(1);
+            const data = JSON.parse(fs.readFileSync("devos-analysis-output.json", "utf8"));
+            if (data.gate && !data.gate.passed) {
+              console.error("DEVOS Release Gate Failed: Blocked by quality policy");
+              process.exit(1);
+            }
+            console.log("DEVOS Release Gate Passed: Safe to ship");
+          '
