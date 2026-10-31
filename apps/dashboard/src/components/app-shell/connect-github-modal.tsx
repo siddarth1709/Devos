@@ -43,7 +43,7 @@ export function ConnectGitHubModal({ isOpen, onClose }: ConnectGitHubModalProps)
     } catch (err: unknown) {
       setErrorMsg(
         (err as { message?: string })?.message ||
-          "Unable to initiate GitHub OAuth. Builder 2's backend service at http://localhost:4000/api may be offline."
+          "Unable to initiate GitHub OAuth. Backend service at http://localhost:3001/api may be offline."
       );
       setIsSubmitting(false);
     }

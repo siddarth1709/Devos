@@ -3,7 +3,7 @@
  * Aligned with Builder 2 specifications.
  */
 
-export type UserRole = "developer" | "reviewer" | "admin";
+export type UserRole = "developer" | "reviewer" | "admin" | "Demo Investigator" | string;
 
 export interface UserProfile {
   id: string;
@@ -12,6 +12,7 @@ export interface UserProfile {
   avatarUrl: string | null;
   email: string | null;
   role: UserRole;
+  isDemo?: boolean;
 }
 
 export type GitHubAuthStatus = "connected" | "not_connected" | "authorizing" | "expired" | "unavailable";

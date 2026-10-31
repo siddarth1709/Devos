@@ -11,6 +11,7 @@ import {
   FIXTURE_ACTION_HISTORY,
 } from "@/lib/fixture-data";
 import { useActions, useCreateAction } from "@/hooks/use-devos-api";
+import { useAuth } from "@/hooks/use-auth";
 import type {
   ActionDefinition,
   ActionRecord,
@@ -26,11 +27,13 @@ import {
 
 function ActionsPageContent() {
   const searchParams = useSearchParams();
+  const { isDemo } = useAuth();
   const repoParam = searchParams.get("repo") || "siddarth1709-Devos";
   const prParam = searchParams.get("pr") || "2";
-  const initialFixture = searchParams.get("fixture") === "1";
+  const initialFixture = searchParams.get("fixture") === "1" || isDemo;
 
   const [useFixtureMode, setUseFixtureMode] = useState<boolean>(initialFixture);
+  const isEffectiveFixture = isDemo || useFixtureMode;
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [activeModalAction, setActiveModalAction] =
     useState<ActionDefinition | null>(null);
@@ -59,11 +62,11 @@ function ActionsPageContent() {
   }, [selectedCategory]);
 
   const activeRecords: ActionRecord[] = useMemo(() => {
-    if (useFixtureMode) return FIXTURE_ACTION_HISTORY;
+    if (isEffectiveFixture) return FIXTURE_ACTION_HISTORY;
     return (liveActionRecords as ActionRecord[]) || [];
-  }, [useFixtureMode, liveActionRecords]);
+  }, [isEffectiveFixture, liveActionRecords]);
 
-  const isBackendConnected = liveActionRecords.length > 0;
+  const isBackendConnected = isEffectiveFixture || liveActionRecords.length > 0;
 
   const handleSelectAction = (action: ActionDefinition) => {
     setNotification(null);
@@ -74,6 +77,14 @@ function ActionsPageContent() {
     action: ActionDefinition,
     params: Record<string, unknown>
   ) => {
+    if (isDemo) {
+      setNotification({
+        type: "info",
+        message: `[DEMO SIMULATOR] Action '${action.name}' validated and simulated successfully. In demonstration mode, real repository modifications are prohibited.`,
+      });
+      setActiveModalAction(null);
+      return;
+    }
     try {
       await createActionMutation.mutateAsync({
         type: action.type,

@@ -1,4 +1,5 @@
 import type {
+  UserProfile,
   GitHubConnectionState,
   Repository,
   Branch,
@@ -16,7 +17,7 @@ import type {
 import type { ActionRequest, ActionResult } from "@/types/actions";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 class DevosApiClient {
   private baseUrl: string;
@@ -30,17 +31,20 @@ class DevosApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-    const headers = {
-      "Content-Type": "application/json",
+    const headers: Record<string, string> = {
       Accept: "application/json",
-      ...(options.headers || {}),
+      ...((options.headers as Record<string, string>) || {}),
     };
+    if (options.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12_000);
 
     try {
       const response = await fetch(url, {
+        credentials: "include",
         ...options,
         headers,
         signal: options.signal || controller.signal,
@@ -88,6 +92,47 @@ class DevosApiClient {
   }
 
   // --- Auth & GitHub Domain ---
+  async getCurrentUser(): Promise<UserProfile> {
+    const res = await this.request<{ user: UserProfile }>("/auth/me");
+    return res.user;
+  }
+
+  async logout(): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>("/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  // --- Demo Mode Domain ---
+  async createDemoSession(): Promise<{ sessionType: "demo"; user: UserProfile; expiresAt: string }> {
+    return this.request<{ sessionType: "demo"; user: UserProfile; expiresAt: string }>(
+      "/demo/session",
+      { method: "POST", body: JSON.stringify({}) }
+    );
+  }
+
+  async getDemoStatus(): Promise<{
+    isDemo: boolean;
+    sessionType: string | null;
+    user: UserProfile | null;
+    expiresAt?: string;
+  }> {
+    return this.request<{
+      isDemo: boolean;
+      sessionType: string | null;
+      user: UserProfile | null;
+      expiresAt?: string;
+    }>("/demo/status");
+  }
+
+  async logoutDemo(): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>("/demo/logout", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
   async getGitHubStatus(): Promise<GitHubConnectionState> {
     return this.request<GitHubConnectionState>("/auth/github/status");
   }
