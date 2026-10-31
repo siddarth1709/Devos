@@ -112,8 +112,71 @@ export async function deleteAnalysis(
   id: string,
   client: DbClient = prisma
 ): Promise<Analysis> {
-  return client.analysis.delete({
-    where: { id },
-  });
+  const executeDelete = async (tx: DbClient): Promise<Analysis> => {
+    try {
+      await tx.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
+    } catch {
+    }
+
+    await tx.findingEvidence.deleteMany({
+      where: {
+        OR: [
+          { finding: { analysisId: id } },
+          { evidence: { analysisId: id } },
+        ],
+      },
+    });
+    await tx.riskTargetResult.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.riskAssessment.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.impactResult.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.actionExecution.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.dependencyEdge.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.dependencyNode.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.rejectedClaim.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.investigation.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.recommendation.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.hypothesis.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.finding.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.evidence.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.changedFile.deleteMany({
+      where: { analysisId: id },
+    });
+    await tx.symbol.deleteMany({
+      where: { analysisId: id },
+    });
+
+    return tx.analysis.delete({
+      where: { id },
+    });
+  };
+
+  if ('$transaction' in client && typeof (client as any).$transaction === 'function') {
+    return (client as any).$transaction(async (tx: DbClient) => executeDelete(tx));
+  }
+  return executeDelete(client);
 }
 

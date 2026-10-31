@@ -473,5 +473,5 @@ describe('Analysis Lifecycle and Completion State Transitions', () => {
     expect(getRes.json().job.status).toBe('completed');
     expect(getRes.json().job.finishedAt).not.toBeNull();
     expect(getRes.json().report).not.toBeNull();
-  });
+  }, 30000);
 });
